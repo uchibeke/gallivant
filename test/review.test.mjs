@@ -11,9 +11,10 @@ import { acquireDaemon, processIdentity } from "../lib/daemon.mjs";
 import { down, readDaemon, up, upInBackground } from "../lib/commands/up.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { resume } from "../lib/commands/resume.mjs";
+import { publicationPolicyOf, workArtifactReason } from "../lib/work_artifacts.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
-import { startPrompt, resumePrompt, fixPrompt } from "../lib/prompt.mjs";
+import { startPrompt, resumePrompt, fixPrompt, registerPrompt, baseRepairPrompt } from "../lib/prompt.mjs";
 import { model } from "../lib/commands/status.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
 import { CONFIG, GOOD_PRD, T0, tempHome, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, harnessBin } from "./helpers.mjs";
@@ -115,6 +116,27 @@ test("only sessions without a PR are told to open one, using the recorded base",
   assert.match(resumePrompt({ repo: "acme/widget", pr: 142 }), /Do not open new PRs/);
 });
 
+test("every implementation path submits evidence for coordinator-owned completion without worker account credentials", () => {
+  const prompts = [
+    startPrompt({ prd: { text: GOOD_PRD }, repo: "acme/widget", branch: "feature", base: "staging", verify: [] }),
+    resumePrompt({ repo: "acme/widget", pr: null, branch: "feature", base: "staging", reason: "no-pr" }),
+    resumePrompt({ repo: "acme/widget", pr: 142, branch: "feature", base: "staging" }),
+    fixPrompt({ repo: "acme/widget", pr: 142, events: [] }),
+    registerPrompt({ repo: "acme/widget", pr: 142 }),
+    baseRepairPrompt({ repo: "acme/widget", pr: 142, branch: "feature", prd: REL,
+      operation: { operationId: "repair", head: "a".repeat(40), baseSha: "b".repeat(40), base: "staging" } }),
+  ];
+  for (const prompt of prompts) {
+    assert.match(prompt, /coordinator builds the per-task passport/i);
+    assert.match(prompt, /observed CI and required reviewer clearance/);
+    assert.match(prompt, /do not need APORT_AGENT_ID or APORT_API_KEY/);
+    assert.match(prompt, /separate skill's completion call before submitting that review PR/);
+    assert.match(prompt, /aport_decision records PRD readiness, not task completion/);
+    assert.match(prompt, /Never claim an APort ALLOW or mark the task complete yourself/);
+    assert.match(prompt, /actual credential or permission failure.*remains a blocker/);
+  }
+});
+
 test("resume refuses changed supporting bytes until accepted, then updates both copies and the prompt", async () => {
   const w = world();
   writeFileSync(join(w.checkout, SOURCE), "updated support");
@@ -126,6 +148,34 @@ test("resume refuses changed supporting bytes until accepted, then updates both 
   assert.equal(w.sources.get(SOURCE), "updated support");
   assert.equal(readFileSync(join(w.worktree, SOURCE), "utf8"), "updated support");
   assert.match(w.runner.started[0].args.at(-1), /source changed: docs\/support.md/);
+});
+
+test("clean resume installs publication policy from the accepted snapshot after base preparation cached the old brief", async t => {
+  const evidence = "docs/evidence/qualification.md";
+  const withException = BRIEF.replace("harness: codex", `harness: codex\npublish_files: [${evidence}]`);
+  for (const [name, before, after, sources, output, blocked] of [
+    ["remove carried source", BRIEF, GOOD_PRD, [SOURCE], SOURCE, false],
+    ["add carried source", GOOD_PRD, BRIEF, [], SOURCE, true],
+    ["approve evidence output", BRIEF, withException, [SOURCE], evidence, false],
+    ["revoke evidence output", withException, BRIEF, [SOURCE], evidence, true],
+  ]) await t.test(name, async () => {
+    const w = world();
+    t.after(() => rmSync(w.home, { recursive: true, force: true }));
+    w.ctx.writePrd(w.id, before);
+    writeFileSync(join(w.worktree, REL), before);
+    writeFileSync(join(w.checkout, REL), after);
+    w.state.update(w.id, { base: "main", sources });
+    const installed = [];
+    w.ctx.git.installHooks = (_dir, policy) => { installed.push(structuredClone(policy)); return { installed: true }; };
+    await w.run({ resnapshot: true });
+    assert.deepEqual(installed[0], publicationPolicyOf(parsePrd(before, REL), { sources, base: "main" }), "base preparation uses the previously approved brief");
+    const accepted = publicationPolicyOf(parsePrd(after, REL), { sources: w.state.get(w.id).sources, base: "main" });
+    assert.deepEqual(installed.at(-1), accepted, "dispatch uses the replacement approved snapshot, including removed restrictions");
+    assert.equal(Boolean(workArtifactReason(output, installed.at(-1))), blocked, "the resulting hook honors grants and revocations");
+    assert.equal(w.runner.started.length, 1);
+    assert.equal(w.state.get(w.id).session, "session");
+    assert.equal(w.ctx.readPrd(w.id), after);
+  });
 });
 
 test("explicit resnapshot preserves unfinished work and unchanged carried instructions", async () => {
@@ -295,12 +345,11 @@ test("daemon exclusion survives missing health, rejects a second owner, and rele
   next.release();
 });
 
-test("a stale daemon lock can be recovered without trusting its reusable PID", () => {
+test("a mismatched identity for an occupied PID does not authorize removing its lease", () => {
   const home = tempHome();
   writeJsonAtomic(join(home, "daemon.lock"), { pid: process.pid, identity: "v2:old process", instance: "old" });
-  const lock = acquireDaemon(home);
-  try { assert.equal(readDaemon(home).instance, lock.owner.instance); }
-  finally { lock.release(); }
+  assert.throws(() => acquireDaemon(home), /PID still occupied/);
+  assert.equal(readDaemon(home).instance, "old");
 });
 
 test("daemon identity and exclusion survive a caller's locale and timezone change", () => {
@@ -349,7 +398,7 @@ test("health write failure still publishes exclusive ownership during startup", 
   assert.equal(readDaemon(w.home).alive, true);
   await assert.rejects(() => up(w.ctx, { once: true }), /already running/);
   rejectProbe(new Error("offline"));
-  await assert.rejects(() => boot, /offline/);
+  await boot;
   assert.equal(readDaemon(w.home), null);
 });
 
@@ -362,7 +411,7 @@ test("down cannot signal an unrelated reused PID or a stopped daemon", () => {
   }
 });
 
-test("up publishes ownership before a slow GitHub probe and releases it on boot failure", async () => {
+test("up publishes ownership before a slow GitHub probe and releases it after an offline one-shot cycle", async () => {
   const w = world();
   let rejectProbe;
   w.ctx.gh.user = () => new Promise((_resolve, reject) => { rejectProbe = reject; });
@@ -371,8 +420,9 @@ test("up publishes ownership before a slow GitHub probe and releases it on boot 
   assert.equal(readDaemon(w.home).starting, true);
   await assert.rejects(() => up(w.ctx, { once: true }), /already running/);
   rejectProbe(new Error("GitHub unavailable"));
-  await assert.rejects(() => boot, /GitHub unavailable/);
+  await boot;
   assert.equal(readDaemon(w.home).alive, false);
+  assert.match(readDaemon(w.home).probes.gh.detail, /GitHub unavailable/);
 });
 
 test("background startup catches spawn errors and cancels an unreported child at timeout", async () => {

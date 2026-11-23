@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, statSync, existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,15 +17,17 @@ const mode = p => statSync(p).mode & 0o777;
 try {
   const packed = JSON.parse(run("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { cwd: source }))[0];
   assert.equal(packed.name, "@uchibeke/gallivant");
-  for (const f of packed.files) assert.ok(!/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
+  const syntheticBriefs = new Set(["plan-view", "task-view", "qualification"].map(name => `templates/dependency-plan/docs/prds/synthetic-${name}.md`));
+  for (const f of packed.files) assert.ok(syntheticBriefs.has(f.path) || !/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   assert.ok(packed.files.some(f => f.path === "README.md"), "README is packaged");
-  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "intake.js", "intake.css", "health.css"])
+  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "plans.js", "plans.css", "intake.js", "intake.css", "health.css"])
     assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
   for (const file of packed.files)
     assert.ok(!/(?:playwright|axe-core|chromium|firefox|webkit|test-results|fixtures)/.test(file.path), `development-only payload: ${file.path}`);
   const packedPaths = new Set(packed.files.map(f => f.path));
   for (const path of packedPaths) assert.ok(runtimeFile(path), `shared release allowlist: ${path}`);
-  for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop"])
+  assert.ok(packedPaths.has("docs/dependency-plan-qualification.md"));
+  for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop", "dependency-plans-desktop", "dependency-plans-review-mobile"])
     assert.ok(packedPaths.has(`docs/ui/previews/${name}.png`), `approved guide asset: ${name}`);
   // Every relative image linked from a shipped guide must exist in the tarball.
   for (const file of packed.files.filter(f => f.path.endsWith(".md"))) {
@@ -87,7 +90,7 @@ esac
   // Doctor has open items on a fresh machine (no APort hook, no ruleset), and init's exit code is doctor's.
   assert.equal(first.status, 1, first.stderr);
   const out = first.stdout;
-  assert.match(out, new RegExp(`Package:\\s+@uchibeke/gallivant ${packed.version.replace(/\\./g, "\\.")} \\(run by npx\\)`));
+  assert.match(out, new RegExp(`Package:\\s+@uchibeke/gallivant ${packed.version.replace(/\\./g, "\\.")} \\(run by npx\\)`), first.stderr);
   const running = out.match(/^Running:\s+(\S+)$/m)?.[1];
   assert.ok(running && running.startsWith(cache) && /[\\/]_npx[\\/]/.test(running) && running.endsWith("bin/gallivant.mjs"), `selected binary from the npx cache: ${running}`);
   assert.ok(!running.startsWith(source), "the source checkout was not what ran");
@@ -130,6 +133,16 @@ esac
   assert.equal(command("--version").trim(), packed.version);
   assert.match(command("--help"), /--no-server/);
   assert.match(command("--help"), /gallivant init/);
+  const example = join(installed, "templates/dependency-plan");
+  const validateExample = extension => JSON.parse(command("plan", "validate", `synthetic.${extension}`, "--dir", example, "--json"));
+  const graphDigest = validateExample("yaml").graphDigest;
+  assert.equal(graphDigest, validateExample("json").graphDigest);
+  const api = `const { compileDependencyPlan } = await import("@uchibeke/gallivant/dependency-plans");
+    console.log(compileDependencyPlan("synthetic.yaml", { directory: process.argv[1] }).graphDigest);`;
+  assert.equal(run(process.execPath, ["--input-type=module", "-e", api, example], { cwd: prefix, env }).trim(), graphDigest);
+  const yamlPackage = createRequire(cli).resolve("yaml/package.json");
+  assert.equal(JSON.parse(readFileSync(yamlPackage, "utf8")).license, "ISC");
+  assert.match(readFileSync(join(dirname(yamlPackage), "LICENSE"), "utf8"), /Permission to use, copy, modify/);
   assert.match(command("new", "first-task"), /docs\/prds\/first-task.md/);
   // A new brief is deliberately a draft with instructions to replace. Verify
   // that its packaged template loads, then check a complete offline fixture.
@@ -168,7 +181,12 @@ esac
     for (const base of ["", "/gallivant"]) {
       if (page) {
         await page.goto(`${ui.origin}${base}/?theme=light`);
-        await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Tasks", exact: true }).click();
+        const tasks = page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Tasks", exact: true });
+        await tasks.click();
+        assert.equal(new URL(page.url()).pathname, `${base}/tasks`);
+        assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
+        assert.equal(await tasks.getAttribute("aria-current"), "page");
+        await page.keyboard.press("/");
         assert.equal(await page.locator(":focus").getAttribute("id"), "overview-q");
         await page.goto(`${ui.origin}${base}/run?id=${encodeURIComponent(TASK)}&run=${RUN}`);
         await page.waitForFunction(() => document.getElementById("workspace-state").textContent.includes("snapshot current"));
@@ -176,16 +194,20 @@ esac
         await page.reload(); assert.equal(await page.locator("#run-note").inputValue(), "Installed package draft");
         assert.equal(await page.locator("#run-note").evaluate(el => getComputedStyle(el).minHeight), "44px");
       }
-      for (const path of ["/", "/health", "/api/system-health", "/task/new", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", `/chains?chain=${CHAIN}`, `/api/chains?chain=${CHAIN}`, "/api/status", "/api/overview?attention=attention", "/api/runs", `/api/run/control?id=${encodeURIComponent(TASK)}&requestId=not-submitted`, `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/tracker.css", "/tracker.js"]) {
+      for (const path of ["/", "/tasks", `/plans?chain=${CHAIN}`, "/system", "/health", "/api/system-health", "/task/new",
+        `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", `/chains?chain=${CHAIN}`, `/api/chains?chain=${CHAIN}`, `/api/plans?chain=${CHAIN}`,
+        "/api/status", "/api/overview?attention=attention", "/api/tasks?attention=attention", "/api/runs",
+        `/api/run/control?id=${encodeURIComponent(TASK)}&requestId=not-submitted`, `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`,
+        "/tracker.css", "/tracker.js"]) {
         const response = await fetch(ui.origin + base + path);
         assert.equal(response.status, 200, `installed UI: ${base}${path}`);
         const body = await response.text();
         assert.ok(body.length > 20);
-        if (path === "/tracker.css") assert.match(body, /--gv-focus/);
-        if (path === "/tracker.js") assert.match(body, /trackerLifecycle/);
+        if (path === "/tracker.css") { assert.match(body, /--gv-focus/); assert.match(body, /\.plan-diagram/); }
+        if (path === "/tracker.js") { assert.match(body, /trackerLifecycle/); assert.match(body, /function trackerPlanControls/); }
         if (path.startsWith("/api/run/control")) { const control = JSON.parse(body); assert.equal(control.request, null); assert.equal(control.requestId, "not-submitted"); }
         if (path === "/") assert.match(body, /Skip to main content/);
-        if (path === "/health") assert.match(body, /data-health/);
+        if (path === "/health" || path === "/system") assert.match(body, /data-health/);
         if (path === "/api/system-health") assert.equal(JSON.parse(body).health.coordinator.state, "unknown");
         if (path === "/task/new") {
           assert.match(body, /Prepare requirements/);
@@ -195,11 +217,23 @@ esac
           assert.equal(denied.status, 409); assert.equal((await denied.json()).code, "TASK_INPUT");
         }
         if (path.startsWith("/chains?")) assert.match(body, /1 of 4 dependencies merged/);
+        if (path.startsWith("/plans?")) assert.match(body, /1 of 4 tasks integrated/);
         if (path.startsWith("/api/chains?")) assert.match(JSON.parse(body).content, /Milestones in dependency order/);
-        if (path.startsWith("/api/run/workspace")) { const snapshot = JSON.parse(body); assert.match(snapshot.summary, /Task workspace/); assert.match(snapshot.evidence, /Independent review/); }
-        if (path.startsWith("/api/overview")) {
+        if (path.startsWith("/api/plans?")) assert.equal(JSON.parse(body).factory.detail.counts.integrated, 1);
+        if (path.startsWith("/api/run/workspace")) {
+          const snapshot = JSON.parse(body);
+          assert.equal(snapshot.version, 1);
+          assert.equal(snapshot.id, TASK);
+          assert.equal(snapshot.run, RUN);
+          assert.match(snapshot.summary, /<h2 id="workspace-decision-heading">Ready for handoff<\/h2>/);
+          assert.match(snapshot.evidence, /Independent review/);
+          assert.match(snapshot.recovery, /Task route and limits/);
+          assert.match(snapshot.execution, /Selected attempt session/);
+        }
+        if (path.startsWith("/api/overview") || path.startsWith("/api/tasks")) {
           const snapshot = JSON.parse(body);
           assert.match(snapshot.content, /data-task-id=/);
+          assert.equal(snapshot.factory.version, 1);
           for (const key of ["repo", "phase", "harness", "attention", "chain"]) assert.ok(snapshot.filters.includes(`id="overview-${key}"`));
         }
       }

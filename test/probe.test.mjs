@@ -84,7 +84,7 @@ function daemonFixture(t) {
     config: { ...CONFIG, repos: [], execution: { deadlineMs: 10, progressMs: 10_000 }, harness: { "openai-agents": { account: "blocked" } } } };
   let progress = 0;
   ctx.executionFor = () => ({ current: () => null, reconcile: async () => { progress++; } });
-  state.put("acme/widget/progress", newEntry({ repo: "acme/widget", harness: "openai-agents", state: STATES.done, nowIso: T0 }));
+  state.put("acme/widget/progress", { ...newEntry({ repo: "acme/widget", harness: "openai-agents", state: STATES.running, nowIso: T0 }), last: { run: "owned", exit: null } });
   const boot = () => {
     const before = new Set(process.listeners("exit")), work = up(ctx);
     const cleanup = process.listeners("exit").find(listener => !before.has(listener));

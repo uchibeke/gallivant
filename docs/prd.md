@@ -186,6 +186,10 @@ gallivant resume widget#142 --resnapshot       # the edit is the brief; the sess
 to reread the brief rather than trust what it remembers. Work already done against a criterion that has not changed
 still stands, which is the whole reason this is a resume and not a restart.
 
+After accepting the replacement, resumed dispatch derives its publication hook, context permissions and task input
+from that approved snapshot, including when base preparation already read the previous brief. Removed restrictions
+and revoked output exceptions take effect on that same resumed turn. Editing the session's copy does not grant approval.
+
 Why a person and not the daemon. A criterion ADDED means the work in flight is valid but incomplete. A criterion
 REWRITTEN means what was built is no longer what is wanted. From the text of two files those are the same event, and
 guessing wrong is expensive in both directions: finish the old brief and you ship the wrong thing, restart and you throw
@@ -219,6 +223,8 @@ Review fixes return to the same session with current findings and checks. The
 ## The completion receipt
 
 Passing the contract gets a PRD started. Getting the PR to `ready-for-human` needs a second gate at the other end, shaped after APort's `deliverable.task.complete.v1` policy: the agent must attest, with evidence, that every acceptance criterion holds.
+
+The implementation session submits a regular PR for review with its evidence receipt; it does not mark the task complete. The coordinator owns completion evaluation, builds the per-task passport and uses observed CI and required review results. Workers do not need `APORT_AGENT_ID`, `APORT_API_KEY`, a newly registered passport or a separate completion-skill call to open that review PR. The brief's `aport_decision` records readiness of the brief, not completion of the implementation, and its availability through a decision lookup is not a publication prerequisite. Actual missing credentials for the implementation or required verification still block those operations and leave the affected attestations unmet.
 
 Each Acceptance criteria bullet becomes a criterion with a stable id, `ac-1`, `ac-2`, in order. The session is told, at start and on every fix round, to end the PR body with a receipt:
 
@@ -259,6 +265,42 @@ Who decides. The built-in rules run first and list every problem at once. When t
 
 APort's deny names one problem at a time (evaluation stops at the first failing rule) and does not include the criterion id, which is why the local pass runs first.
 
+When the recovery service budget expires, the hosted decision stays pending until a later review poll. The failure count stays unchanged and the hosted decision remains required even with `deliverable.on_unreachable: local`.
+
+### Inspect the payload with a mock verifier
+
+Run the walkthrough from a source checkout with Node.js 22 or later. See [test/deliverable.test.mjs](../test/deliverable.test.mjs).
+
+```sh
+node --test --test-reporter=spec --test-name-pattern='completion receipt walkthrough' test/deliverable.test.mjs
+```
+
+The walkthrough uses a synthetic widget export brief, receipt, check rollup and diff. Each `POST` diagnostic
+prints the mock endpoint and the serialized request body produced by the real gate. The Git host, verifier
+and corrective runner are in-process test doubles, so the walkthrough runs offline.
+
+For PR completion, the `passport` carries the approved brief's criterion IDs and descriptions and the
+policy limits. The `context` carries the coordinator's task ID, the receipt's output type, summary and
+attestations, the observed `tests_passing` value, the generated agent and idempotency identifiers, and
+provenance. With scanning enabled, `output_content` contains the added hunk lines with their diff markers
+stripped. Setting `deliverable.scan_output: false` omits that field for PR completion.
+
+PRD readiness uses the same endpoint with `output_type: "document"`. Its `output_content` contains the Markdown
+body after removing frontmatter, and its criteria and attestations come from the PRD contract checker. Only the
+PR completion request in the walkthrough carries `tests_passing`.
+
+| Fixture | Observed behavior |
+| --- | --- |
+| In-progress CI with a receipt claiming green checks | The PR stays open with zero verifier requests. Observed success on the next check permits the request. |
+| Clean additions and `evaluator: "local"` | The built-in rules accept the receipt with zero verifier requests. |
+| A blocked marker on an added line | The local scan returns `oap.blocked_pattern_detected` before any verifier request, even on a line that starts with `++`. |
+| Hosted denial with fallback configured | The deny code goes into the corrective receipt round. |
+| Connection failure with `on_unreachable: "wait"` | The PR stays open with a pending gate retry and no corrective round. |
+| The same failure with `on_unreachable: "local"` | The local pass stands and the log records `local (aport unreachable)`. |
+
+The coordinator tests require Node to launch `ps` and inspect its own process for the task lock. If the tests
+report `cannot identify this task review decision`, run the command in an environment that permits that check.
+
 ## Provenance on a decision
 
 Both gates send a `meta` object inside the context they already send:
@@ -270,3 +312,5 @@ Both gates send a `meta` object inside the context they already send:
 `framework` is the harness that did the work, or that the brief names for a readiness decision. `gallivant_version` is the release that asked. A machine running Claude Code and Codex against one passport otherwise produces decisions nobody can tell apart afterwards, and the OAP decision object is closed (`additionalProperties: false`), so the request context is where this belongs. No specification change was needed: the policy packs leave `additionalProperties` unset, which in JSON Schema already permits extra properties, and the hosted validator's context schemas are `.unknown(true)`. An older verifier ignores the field.
 
 It is self-reported and it is never an authorization input. Gallivant asserts these two values and nothing verifies them, so a field the caller controls could be forged the moment anything read it back to decide something. It is recorded for audit and analytics, and the local rules ignore it entirely; a test asserts that a forged `meta` changes no verdict in either direction.
+
+Use `implementation_targets` for exact repository-relative files the owner explicitly asks to change. Typed intake accepts repeated `--implementation-target <file>`. A carried source that is also a target needs an explicit exact output exception or a revised brief. The checker reports the conflicting path. File extensions and the advisory “Where to look” section confer no edit authority. Protected credential and agent-configuration paths cannot be output exceptions.

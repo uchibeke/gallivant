@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makePackageAuthPreflight, packageAuthEnvironment, packageAuthProblems } from "../lib/package_auth.mjs";
+import { runRecoveryWork } from "../lib/recovery_io.mjs";
 import { runEnv, runSessionEnv } from "../lib/git.mjs";
 import { validate, repoEntries, rememberRepo, configPath } from "../lib/config.mjs";
 import { writeJsonAtomic, readJson } from "../lib/fs.mjs";
@@ -62,14 +63,35 @@ test("parallel checks deduplicate but credential, package and repo changes canno
   await preflight({ ...input, repo: "acme/other", credential: { ...credential, repository: "acme/other" }, config: { repos: [{ repo: "acme/other", package_auth: policy }] } }); assert.equal(calls, 7);
 });
 
+test("an elapsed recovery budget leaves package access unproven and retryable", async () => {
+  let calls = 0;
+  const preflight = makePackageAuthPreflight({ fetch: async () => { calls++; return response(200); } });
+  await runRecoveryWork(async () => {
+    const deferred = { code: "RECOVERY_IO_BUDGET", dispatchNotSent: true };
+    await Promise.all([assert.rejects(preflight(input), deferred), assert.rejects(preflight(input), deferred)]);
+  }, 0);
+  assert.equal(calls, 0);
+  await preflight(input);
+  await preflight(input);
+  assert.equal(calls, policy.packages.length, "only a completed probe is cached");
+});
+
 test("failed, redirected and timed-out probes cannot grant access or disclose secrets", async () => {
   for (const status of [401, 403, 404, 429, 302, 500]) {
-    let calls = 0;
-    const preflight = makePackageAuthPreflight({ fetch: async () => { calls++; return response(status); } });
+    const capacity = status === 429 || status >= 500;
+    let calls = 0, discarded = 0;
+    const preflight = makePackageAuthPreflight({ fetch: async () => {
+      calls++;
+      return { ...response(status), body: { cancel: async () => { discarded++; } } };
+    } });
     for (let retry = 0; retry < 2; retry++) await assert.rejects(preflight(input), error => {
-      assert.equal(error.code, "PACKAGE_AUTH"); assert.doesNotMatch(error.message, /package-test-secret/); return true;
+      assert.equal(error.code, capacity ? "REGISTRY_CAPACITY" : "PACKAGE_AUTH");
+      if (capacity) assert.equal(error.status, status);
+      assert.doesNotMatch(error.message, /package-test-secret/);
+      return true;
     });
-    assert.equal(calls, 2, "failed authentication is not cached as clearance");
+    assert.equal(calls, 2, "a failed probe is not cached as clearance");
+    assert.equal(discarded, calls);
   }
   const redirected = makePackageAuthPreflight({ fetch: async () => { throw new Error("Bearer package-test-secret"); } });
   await assert.rejects(redirected(input), error => !error.message.includes("package-test-secret"));

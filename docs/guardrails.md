@@ -20,6 +20,13 @@ and do not inherit those guarantees merely because an adapter exists. Hosted
 Agents has a separate sandbox/artifact-publication boundary described next.
 The APort pre-tool hook and deliverable-completion gate are separate controls.
 
+Dependency plans require scoped operator grants and qualified isolation of the
+registry, input snapshots and control routes. A future anchor grants observation
+of its exact frozen producer. Task and plan controls keep their original owners.
+Disposable qualification uses a separately pinned protected admission and
+independent signed observations. The authorized maintainer owns the exact merge.
+[Plan controls and evidence](dependency-plan-qualification.md)
+
 ## Hosted execution and preparation
 
 Hosted Agents receives the approved source snapshot and configured network/package
@@ -137,6 +144,16 @@ only what they test. See [prd.md](prd.md) and [execution](execution.md).
 also affect what is required for readiness. A ready state is therefore a result
 under the configured gates, not a general security or semantic-correctness proof.
 The pre-tool policy, provider sandbox and human merge decision remain separate.
+
+Qualified repair binds the commit hook to the accepted snapshot and pinned
+merge parent. The coordinator can reinstall a known stale derivation through
+the ordinary hook installer and verify its digest. An unexpected hook, custom
+hooks path, protected implementation target or contradictory source
+declaration requires operator correction. A repair leaves workflow definitions,
+assertions, toolchains and the approved Verify commands under their existing
+authority. Private collision backups and journals stay outside the checkout.
+The filesystem proof detects changed paths and bytes under the qualified
+workspace owner. It requires outer isolation from concurrent untrusted writers.
 
 ## What reaches a prompt
 
@@ -365,3 +382,11 @@ are forced into a result. Verification permits private inputs to remain untracke
 and modes exactly match the coordinator snapshots. Editing, staging, deleting or substituting them fails publication.
 Codex Cloud's Git-only input transport cannot provide this privacy for new/changed inputs and refuses before commit
 or push; its dispatch is separately unavailable until repository binding is qualified. See [codex-cloud.md](codex-cloud.md).
+
+Recovery policy requires an enforced outer execution boundary for same-UID workers. Owner-only file modes and verification receipts from a different adapter cannot qualify an author. Completion credentials stay with the coordinator. The [recovery admission contract](autonomous-recovery.md#recovery-policy-and-admission) lists the scoped controls and qualification limits.
+
+Disposable approval pins synthetic repositories, refs, static patch and base
+digests, route and credential references, time and spend. Independent owners
+sign bound evidence outside the author, reviewer and preparation sandboxes.
+The shipped hosts use an independent maintainer for fixture integration.
+[Qualification evidence and merge scope](recovery-qualification.md)

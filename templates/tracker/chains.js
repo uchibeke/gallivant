@@ -2,18 +2,28 @@
 (() => {
   const root = document.querySelector?.('[data-chains]');
   if (!root) return;
-  // Pin the server-preselected chain so polling/back navigation keep its context.
-  const initialChain = root.querySelector('.chain-workspace[data-chain]')?.dataset.chain;
-  const initialUrl = new URL(location.href);
-  if (initialChain && !initialUrl.searchParams.has('chain')) {
-    initialUrl.searchParams.set('chain', initialChain); history.replaceState(history.state, '', initialUrl);
+  const legacy = root.dataset.path === '/chains';
+  const results = document.getElementById('chains-results');
+  // Pin the server-preselected identifiers without replacing an explicit selection.
+  function pinSelection(url) {
+    const selected = results.querySelector('[data-selected-plan]')?.dataset;
+    const selection = legacy ? { chain: selected?.chain, milestone: selected?.selectedMilestone }
+      : { plan: selected?.selectedPlan, node: selected?.selectedNode };
+    for (const [key, value] of Object.entries(selection)) {
+      if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
+    }
+    return url;
   }
+  const initialUrl = pinSelection(new URL(location.href));
+  if (initialUrl.href !== location.href) history.replaceState(history.state, '', initialUrl);
   const status = document.getElementById('chains-status'), refresh = document.getElementById('chains-refresh');
   const apply = document.getElementById('chains-apply'), dialog = document.getElementById('chain-confirm');
   const review = document.getElementById('chain-review'), actionStatus = document.getElementById('chain-action-status');
   const submit = document.getElementById('chain-submit'), close = document.getElementById('chain-close');
-  let busy = false, failures = 0, cancelTimer, pending, confirmation, posting = false, trigger;
+  let busy = false, failures = 0, cancelTimer, pending, confirmation, posting = false, trigger, stale = false, reading;
   let observed = status.textContent;
+  const feedback = trackerFeedback(status);
+  const planControls = legacy ? null : trackerPlanControls(root, lifecycle, () => poll());
   const supported = typeof dialog.showModal === 'function' && typeof globalThis.crypto?.randomUUID === 'function';
   const enforceSupport = () => {
     if (supported) return;
@@ -25,42 +35,131 @@
   enforceSupport();
   const held = () => {
     const selection = globalThis.getSelection?.();
-    return dialog.open || document.getElementById('chains-results').contains(document.activeElement)
+    return dialog.open || planControls?.held || results.contains(document.activeElement)
       || selection && !selection.isCollapsed && (root.contains(selection.anchorNode) || root.contains(selection.focusNode))
       || document.querySelector('#chains-results details[open]') || scrollY > root.offsetTop;
   };
-  function render(data, force = false) {
+  function render(data, force = false, url = new URL(location.href)) {
     if (typeof data?.content !== 'string' || !Number.isFinite(Date.parse(data.observedAt))) throw new Error('Invalid chain snapshot');
     const next = new DOMParser().parseFromString(data.content, 'text/html').getElementById('chains-results');
     if (!next) throw new Error('Invalid chain snapshot');
-    if (!force && held()) { pending = data; apply.hidden = false; status.textContent = `Updates ready · ${observed}. Apply when ready.`; return; }
-    const theme = new URL(location.href).searchParams.get('theme');
-    for (const link of next.querySelectorAll('a[href]')) {
-      const url = new URL(link.href);
-      if (url.origin !== location.origin) continue;
-      if (theme) url.searchParams.set('theme', theme); else url.searchParams.delete('theme');
-      link.href = url.pathname + url.search;
+    const restricted = data.factory?.permissions === 'scoped';
+    if (!force && !restricted && held()) {
+      pending = data; apply.hidden = false;
+      feedback.show(`Updates ready · ${observed}. Apply when ready.`, { state: 'pending' });
+      return;
     }
-    document.getElementById('chains-results').replaceWith(next); enforceSupport();
+    const theme = url.searchParams.get('theme');
+    for (const link of next.querySelectorAll('a[href]')) {
+      const href = link.getAttribute('href');
+      if (href.startsWith('#')) continue;
+      const target = new URL(href, url);
+      if (target.origin !== location.origin) continue;
+      if (theme) target.searchParams.set('theme', theme); else target.searchParams.delete('theme');
+      link.href = target.pathname + target.search + target.hash;
+    }
+    patchSnapshot(results, next);
+    if (restricted && dialog.open && !root.querySelector('[data-chain-action]:enabled')) dialog.close();
+    enforceSupport();
+    stale = false; planControls?.sync(false);
     pending = null; apply.hidden = true; observed = `snapshot observed ${data.observedAt}`;
-    status.textContent = `Current · ${observed}`;
+    feedback.show(`Current · ${observed}`);
+    if (!force && !legacy) {
+      const pinned = pinSelection(new URL(location.href));
+      if (pinned.href !== location.href) {
+        history.replaceState(history.state, '', pinned);
+        carrySelection(pinned);
+      }
+    }
   }
   const schedule = delay => { cancelTimer?.(); cancelTimer = lifecycle.schedule(poll, delay); };
-  async function poll() {
-    if (busy || posting) return;
+  async function poll(navigation) {
+    if (posting || planControls?.busy || busy && !navigation) return;
+    reading?.abort();
+    const request = reading = new AbortController();
     busy = true; refresh.disabled = true; cancelTimer?.();
-    const active = lifecycle.guard();
+    const live = lifecycle.guard(), active = () => live() && reading === request;
+    const url = navigation?.url ?? new URL(location.href);
+    if (navigation) feedback.show('Loading selected plan view…', { pending: true });
+    refresh.setAttribute('aria-busy', 'true');
     try {
-      const data = await lifecycle.read(`${BASE}/api/chains${location.search}`, 'Chain snapshot unavailable', 8000);
+      const data = await lifecycle.read(`${BASE}/api${root.dataset.path}${url.search}`, 'Plan snapshot unavailable', 8000, request.signal);
       if (!active()) return;
-      render(data); failures = 0;
+      const previous = navigation?.push ? historyView() : null;
+      if (navigation?.push) {
+        const theme = new URL(location.href).searchParams.get('theme');
+        if (theme) url.searchParams.set('theme', theme); else url.searchParams.delete('theme');
+      }
+      render(data, !!navigation, url); failures = 0;
+      if (navigation) finishNavigation(navigation, previous);
     } catch {
       if (!active()) return;
       failures++; pending = null; apply.hidden = true;
-      status.textContent = `${failures > 1 ? 'Disconnected' : 'Stale'} · last good ${observed}. ${failures < 3 ? 'Retry scheduled.' : 'Automatic retry paused; use Refresh chains.'}`;
+      stale = true; submit.disabled = true; planControls?.sync(true);
+      for (const button of root.querySelectorAll('[data-chain-action]')) button.disabled = true;
+      if (dialog.open) actionStatus.textContent = 'Plan observation is stale. Close this review and refresh before confirming.';
+      feedback.show(`${failures > 1 ? 'Disconnected' : 'Stale'} · last good ${observed}. ${failures < 3 ? 'Retry scheduled.' : 'Automatic retry paused; use Refresh.'}${root.querySelector('[data-chain-action], [data-plan-action]') ? ' Refresh before reviewing a control.' : ''}`, { state: 'error' });
     } finally {
-      if (active()) { busy = false; refresh.disabled = false; if (failures < 3) schedule(failures ? Math.min(60000, 10000 * 2 ** failures) : 10000); }
+      if (active()) {
+        busy = false; refresh.disabled = false; refresh.setAttribute('aria-busy', 'false');
+        if (failures < 3) schedule(failures ? Math.min(60000, 10000 * 2 ** failures) : 10000);
+      }
     }
+  }
+  function historyView() {
+    return { x: scrollX, y: scrollY, open: [...results.querySelectorAll('details[open][data-key]')].map(item => item.dataset.key) };
+  }
+  function carrySelection(url) {
+    const filter = root.querySelector('.chain-filters');
+    for (const key of ['plan', 'node', 'diagram', 'milestone']) {
+      const value = url.searchParams.get(key);
+      let field = filter.querySelector(`input[name="${key}"]`);
+      if (!field && value) { field = document.createElement('input'); field.type = 'hidden'; field.name = key; filter.append(field); }
+      if (field) field.value = value ?? '';
+      for (const link of document.querySelectorAll('.views a, .command-links a')) {
+        const target = new URL(link.href);
+        if (value) target.searchParams.set(key, value); else target.searchParams.delete(key);
+        link.href = target.pathname + target.search + target.hash;
+      }
+    }
+  }
+  function finishNavigation({ url, push, link, focus, position }, previous) {
+    pinSelection(url);
+    if (push) {
+      history.replaceState({ ...history.state, planView: previous }, '', location.href);
+      history.pushState(null, '', url);
+    } else if (url.href !== location.href) history.replaceState(history.state, '', url);
+    const theme = url.searchParams.get('theme');
+    if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
+    document.getElementById('theme').value = theme || '';
+    carrySelection(url);
+    if (position) {
+      const open = new Set(position.open);
+      for (const item of results.querySelectorAll('details[data-key]')) item.open = open.has(item.dataset.key);
+      scrollTo(position.x, position.y);
+    }
+    if (!link) return;
+    const destination = focus === 'node' ? document.getElementById('selected-plan-node')
+      : focus === 'diagram' ? results.querySelector('.plan-section-heading a, .plan-diagram-toggle')
+      : link.isConnected ? link : document.getElementById('chain-title') ?? refresh;
+    destination?.focus({ preventScroll: !matchMedia('(max-width: 700px)').matches });
+  }
+  if (!legacy) {
+    carrySelection(initialUrl);
+    root.addEventListener('click', event => {
+      const link = event.target.closest('#chains-results a[href]');
+      if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target) return;
+      const url = new URL(link.href);
+      if (url.origin !== location.origin || url.pathname !== location.pathname || url.hash) return;
+      event.preventDefault();
+      const focus = link.closest('.milestone-list, .plan-diagram, .diagram-list, .prerequisite-list') ? 'node'
+        : link.closest('.plan-section-heading, .plan-diagram-toggle') ? 'diagram' : null;
+      if (url.href !== location.href) poll({ url, push: true, link, focus });
+    });
+    globalThis.addEventListener('popstate', event => {
+      if (location.hash) return;
+      poll({ url: new URL(location.href), position: event.state?.planView });
+    });
   }
   refresh.addEventListener('click', () => { failures = 0; poll(); });
   apply.addEventListener('click', () => { if (pending && !dialog.open) { render(pending, true); refresh.focus({ preventScroll: true }); } });
@@ -88,21 +187,14 @@
     review.append(note);
   }
   async function post(input) {
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-    try {
-      const response = await fetch(`${BASE}/api/chain/control?chain=${encodeURIComponent(confirmation.name)}`, {
-        method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'X-Gallivant-Token': root.dataset.token }, body: JSON.stringify(input),
-      });
-      const data = await response.json();
-      if (!response.ok) throw Object.assign(new Error(data.error || 'Request refused. Refresh and review again.'), { refused: response.status >= 400 && response.status < 500 });
-      if (data.requestId !== input.requestId || data.action !== input.action || data.status !== (input.stage === 'review' ? 'review' : 'applied')
-        || input.stage === 'review' && (!/^[a-f0-9]{64}$/.test(data.revision || '') || !Array.isArray(data.differences))) throw new Error('Response identity unconfirmed.');
-      return data;
-    } finally { clearTimeout(timer); }
+    const data = await trackerControlPost(`${BASE}/api/chain/control?chain=${encodeURIComponent(confirmation.name)}`, input, root.dataset.token);
+    if (data.requestId !== input.requestId || data.action !== input.action || data.status !== (input.stage === 'review' ? 'review' : 'applied')
+      || input.stage === 'review' && (!/^[a-f0-9]{64}$/.test(data.revision || '') || !Array.isArray(data.differences))) throw new Error('Response identity unconfirmed.');
+    return data;
   }
   root.addEventListener('click', async event => {
     const button = event.target.closest('[data-chain-action]');
-    if (!supported || !button || button.disabled || posting || dialog.open) return;
+    if (!supported || !button || button.disabled || busy || posting || dialog.open || stale) return;
     trigger = button;
     const chain = button.closest('[data-chain]');
     confirmation = { name: chain.dataset.chain, action: button.dataset.chainAction, revision: chain.dataset.revision, requestId: crypto.randomUUID() };
@@ -117,7 +209,7 @@
     finally { posting = false; close.disabled = false; schedule(10000); }
   });
   submit.addEventListener('click', async () => {
-    if (posting || submit.disabled) return;
+    if (busy || posting || submit.disabled || stale) return;
     posting = true; submit.disabled = true; close.disabled = true;
     actionStatus.textContent = 'Applying the reviewed scope…';
     try {

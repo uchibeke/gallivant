@@ -1,24 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { criteriaFromPrd, parseReceipt, evaluate, gate, taskPassport, evaluateHosted, receiptInstructions, receiptHash, RECEIPT_TAG, DEFAULT_LIMITS, MAX_POLICY_BYTES, provenance } from "../lib/deliverable.mjs";
 import { parsePrd } from "../lib/prd.mjs";
 import { VERSION } from "../lib/fs.mjs";
 import { makeTick, COMPLETION_GATE } from "../lib/tick.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
 import { DEFAULT_DELIVERABLE } from "../lib/config.mjs";
+import { runRecoveryWork } from "../lib/recovery_io.mjs";
 import { CONFIG, GOOD_PRD, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, comment, checkRun, claudeResultLines, silentLog, STATES, fakeCredential, fakeIdentity } from "./helpers.mjs";
 
 const prd = parsePrd(GOOD_PRD, "/r/docs/prds/widget-export.md");
 const criteria = criteriaFromPrd(prd);
-const receiptBlock = (over = {}) => "\n```" + RECEIPT_TAG + "\n" + JSON.stringify({
+const exportReceipt = {
   task_id: "widget/widget-export", output_type: "code",
   summary: "Added a CSV export endpoint and button, with unit tests for three rows and the empty state, verified by npm test and npm run lint locally.",
   criteria_attestations: [
     { criterion_id: "ac-1", met: true, evidence: "src/export/csv.test.ts: 'exports three rows'" },
     { criterion_id: "ac-2", met: true, evidence: "src/export/Button.tsx:41 disabled when items.length === 0; test 'empty state hint'" },
   ],
-  ...over,
-}, null, 2) + "\n```\n";
+};
+const receiptBlock = (over = {}) => "\n```" + RECEIPT_TAG + "\n" + JSON.stringify({ ...exportReceipt, ...over }, null, 2) + "\n```\n";
 
 test("criteria come from the PRD in order with stable ids", () => {
   assert.deepEqual(criteria.map(c => c.id), ["ac-1", "ac-2"]);
@@ -142,6 +144,20 @@ test("a failed later chunk never turns earlier hosted allows into completion", a
   assert.equal(result.pending, true);
 });
 
+test("an expired recovery budget before the evaluator request cannot use local fallback", async () => {
+  let calls = 0;
+  const result = await runRecoveryWork(() => gate({
+    taskId: "t", prBody: receiptBlock(), criteria, checksGreen: true,
+    limits: { ...DEFAULT_DELIVERABLE, on_unreachable: "local" },
+    fetch: async () => { calls++; return { ok: true, status: 200, json: async () => allowResponse }; },
+  }), 0);
+  assert.equal(calls, 0);
+  assert.equal(result.allow, false);
+  assert.equal(result.pending, true);
+  assert.equal(result.decisionId, null);
+  assert.equal(result.denials[0].code, "RECOVERY_IO_BUDGET");
+});
+
 test("the local blocked-pattern scan agrees with the hosted case-insensitive matcher", () => {
   const result = evaluate({ criteria, limits: LOCAL, context: { ...parseReceipt(receiptBlock()).receipt, tests_passing: true, output_content: "CONSOLE.LOG('debug')" } });
   assert.ok(result.denials.some(d => d.code === "oap.blocked_pattern_detected"));
@@ -160,21 +176,161 @@ test("with evaluator aport the hosted verdict confirms or overrides a local pass
   assert.deepEqual([down.allow, down.pending, down.source, down.denials[0].code], [false, true, "aport (unreachable)", "aport.unreachable"]);
   assert.match(warned[0], /ECONNREFUSED/);
   const fallback = await gate({ taskId: "t", prBody: body, criteria, checksGreen: true, limits: { ...DEFAULT_DELIVERABLE, on_unreachable: "local" }, fetch: async () => { throw new Error("ECONNREFUSED"); }, log: { warn: () => {} } });
-  assert.deepEqual([fallback.allow, fallback.pending, fallback.source], [true, undefined, "local (aport unreachable)"]);
+  assert.deepEqual([fallback.allow, fallback.pending, fallback.source, fallback.decisionId], [true, undefined, "local (aport unreachable)", null]);
   const localFail = await gate({ taskId: "t", prBody: body, criteria, checksGreen: false, fetch: async () => { throw new Error("must not be called when local already denies"); } });
   assert.deepEqual([localFail.allow, localFail.source], [false, "local"]);
 });
 
-function world(stateOver = {}, ghOver = {}) {
+function world(stateOver = {}, ghOver = {}, { config = CONFIG, fetch = fetchWith(200, allowResponse), log = silentLog } = {}) {
   const clock = makeClock();
   const { state, id } = seededState(stateOver);
   const gh = fakeGh(ghOver);
   const runner = fakeRunner(clock);
   const notify = fakeNotify();
-  const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(),  config: CONFIG, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, fetch: fetchWith(200, allowResponse) });
+  const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(), config, state, gh, git: fakeGit(), notify, log, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, fetch });
   return { clock, state, id, gh, runner, notify, tick, entry: () => state.get(id) };
 }
 const clearReviewer = () => [review({ id: 2, by: "chatgpt-codex-connector[bot]", bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3d`" })];
+
+const verifierUrl = "https://verifier.example.invalid";
+
+function mockVerifier(respond = fetchWith(200, allowResponse)) {
+  const requests = [];
+  const fetch = async (url, { method, headers, body }) => {
+    requests.push({ url, method, headers, body });
+    return respond();
+  };
+  return { fetch, requests };
+}
+
+function showPayload(t, { method, url, body }) {
+  t.diagnostic(method + " " + url);
+  t.diagnostic(body);
+}
+
+test("completion receipt walkthrough for a pull request", async t => {
+  const blockedPattern = "UNSHIPPED_EXPORT_MARKER";
+  const limits = { ...DEFAULT_LIMITS, api_url: verifierUrl, blocked_patterns: [blockedPattern] };
+  const prBody = "Adds export.\n" + receiptBlock({
+    task_id: "receipt-claimed-task", tests_passing: true, output_content: "receipt-supplied output",
+  });
+  const diff = [
+    "diff --git a/export-sample.txt b/export-sample.txt",
+    "--- a/export-sample.txt",
+    "+++ b/export-sample.txt",
+    "@@ -1,2 +1,3 @@",
+    " " + blockedPattern + " in context",
+    "-" + blockedPattern + " removed",
+    "+widget,price",
+    "+++ b/example-data.txt",
+    "",
+  ].join("\n");
+  const blockedDiff = diff.replace("+++ b/example-data.txt", "+++ " + blockedPattern.toLowerCase());
+  const passing = checkRun({ name: "test", conclusion: "SUCCESS" });
+  const prWithCheck = check => prFixture({ body: prBody, statusCheckRollup: [check] });
+  const unreachable = async () => { throw new Error("ECONNREFUSED"); };
+
+  function fixture({ policy = {}, patch = diff, check = passing, respond } = {}) {
+    const { fetch, requests } = mockVerifier(respond);
+    const messages = [];
+    const log = { ...silentLog, info: m => messages.push(m), warn: m => messages.push(m) };
+    const config = { ...CONFIG, deliverable: { ...limits, ...policy } };
+    const w = world({}, { pr: prWithCheck(check), reviews: clearReviewer() }, { config, fetch, log });
+    w.gh.prDiff = async () => patch;
+    w.clock.advance(4);
+    return { ...w, requests, messages };
+  }
+
+  await t.test("waits for observed CI before posting the exact completion payload", async t => {
+    const w = fixture({ check: checkRun({ name: "test", status: "IN_PROGRESS" }) });
+    await w.tick.tick();
+    assert.equal(w.entry().reviewObservation.checks.settled, false);
+    assert.equal(w.entry().state, STATES.prOpen);
+    assert.deepEqual(w.requests, []);
+    assert.equal(w.runner.started.length, 0);
+
+    w.gh.data.pr = prWithCheck(passing);
+    w.clock.advance(CONFIG.poll_seconds / 60);
+    await w.tick.tick();
+    assert.equal(w.entry().reviewObservation.checks.settled, true);
+    assert.equal(w.entry().state, STATES.ready);
+    assert.equal(w.requests.length, 1);
+    const request = w.requests[0];
+    assert.equal(request.url, verifierUrl + "/api/verify/policy/deliverable.task.complete.v1");
+    assert.equal(request.method, "POST");
+    assert.deepEqual(request.headers, { "Content-Type": "application/json" });
+    const payload = JSON.parse(request.body);
+    assert.deepEqual(Object.keys(payload).sort(), ["context", "passport"]);
+    const { passport, context: { idempotency_key, ...context } } = payload;
+    assert.deepEqual(passport, taskPassport({ taskId: w.id, limits, criteria }));
+    assert.deepEqual(passport.limits["deliverable.task.complete"], {
+      require_summary: true, min_summary_words: 20, require_tests_passing: true,
+      scan_output: true, blocked_patterns: [blockedPattern], acceptance_criteria: criteria,
+    });
+    assert.match(idempotency_key, /^widget\/widget-export-[0-9a-f]{12}$/);
+    assert.deepEqual(context, {
+      task_id: w.id, output_type: "code", summary: exportReceipt.summary,
+      criteria_attestations: exportReceipt.criteria_attestations,
+      tests_passing: true, output_content: "widget,price\n++ b/example-data.txt",
+      meta: { framework: "claude", gallivant_version: VERSION }, agent_id: passport.agent_id,
+    });
+    showPayload(t, request);
+  });
+
+  await t.test("local evaluation accepts clean additions without a hosted request", async () => {
+    const w = fixture({ policy: { evaluator: "local" } });
+    await w.tick.tick();
+    assert.equal(w.entry().state, STATES.ready);
+    assert.deepEqual(w.requests, []);
+  });
+
+  await t.test("a blocked addition fails locally before any hosted request", async () => {
+    const w = fixture({ patch: blockedDiff });
+    await w.tick.tick();
+    assert.equal(w.entry().state, STATES.prOpen);
+    assert.deepEqual(w.requests, []);
+    assert.equal(w.runner.started.length, 1);
+    assert.match(w.runner.started[0].args.at(-1), /oap\.blocked_pattern_detected/);
+  });
+
+  await t.test("disabled scanning omits the diff from the hosted payload", async () => {
+    const w = fixture({ policy: { scan_output: false }, patch: blockedDiff });
+    await w.tick.tick();
+    assert.equal(w.entry().state, STATES.ready);
+    assert.equal(w.requests.length, 1);
+    assert.equal(Object.hasOwn(JSON.parse(w.requests[0].body).context, "output_content"), false);
+  });
+
+  await t.test("a hosted denial starts a receipt round even with fallback configured", async () => {
+    const w = fixture({ policy: { on_unreachable: "local" }, respond: fetchWith(200, denyResponse) });
+    await w.tick.tick();
+    assert.equal(w.requests.length, 1);
+    assert.equal(w.entry().state, STATES.prOpen);
+    assert.equal(w.runner.started.length, 1);
+    assert.match(w.runner.started[0].args.at(-1), /oap\.summary_insufficient/);
+  });
+
+  await t.test("an unavailable verifier leaves the gate pending by default", async () => {
+    const w = fixture({ respond: unreachable });
+    await w.tick.tick();
+    assert.equal(w.requests.length, 1);
+    assert.equal(w.entry().state, STATES.prOpen);
+    assert.equal(w.entry().retry.op, COMPLETION_GATE);
+    assert.match(w.entry().retry.error, /ECONNREFUSED/);
+    assert.equal(w.entry().iteration, 0);
+    assert.equal(w.runner.started.length, 0);
+    assert.equal(w.gh.calls.some(c => c[0] === "addLabel" && c[2] === READY_LABEL), false);
+  });
+
+  await t.test("an unavailable verifier uses the local verdict when configured", async () => {
+    const w = fixture({ policy: { on_unreachable: "local" }, respond: unreachable });
+    await w.tick.tick();
+    assert.equal(w.requests.length, 1);
+    assert.equal(w.entry().state, STATES.ready);
+    assert.ok(w.messages.includes("widget/widget-export: completion gate passed (local (aport unreachable))"));
+    assert.equal(w.runner.started.length, 0);
+  });
+});
 
 test("the gate's context carries self-reported provenance, and the hosted call sends it", async () => {
   const body = "Adds export.\n" + receiptBlock();
@@ -201,13 +357,24 @@ test("provenance never decides anything: the local rules ignore meta entirely", 
   assert.equal(forged.allow, false);
 });
 
-test("PRD readiness carries the harness named in the brief as its provenance", async () => {
-  const good = parsePrd(GOOD_PRD, "/r/docs/prds/widget-export.md");
-  const { context } = prdContract(good, check(good), RULES);
-  assert.deepEqual(context.meta, { framework: "codex", gallivant_version: VERSION }, "the harness that will do the work is the provenance of the decision authorising it");
-  const sent = [];
-  await decidePrdReady({ prd: good, verdict: check(good), rules: RULES, limits: PRD_LIMITS, fetch: async (_u, init) => { sent.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => allowResponse }; } });
-  assert.deepEqual(sent[0].context.meta, { framework: "codex", gallivant_version: VERSION });
+test("completion receipt walkthrough for PRD readiness posts the Markdown body", async t => {
+  const limits = { ...PRD_LIMITS, api_url: verifierUrl };
+  const verdict = check(prd);
+  const { fetch, requests } = mockVerifier();
+  const result = await decidePrdReady({ prd, verdict, rules: RULES, limits, fetch });
+  assert.deepEqual([result.allow, result.decisionId], [true, "dec_1"]);
+  assert.equal(requests.length, 1);
+  const request = requests[0];
+  const { passport, context } = JSON.parse(request.body);
+  const contract = prdContract(prd, verdict, RULES);
+  assert.deepEqual(passport.limits["deliverable.task.complete"].acceptance_criteria, contract.criteria);
+  assert.equal(context.task_id, "prd:widget-export");
+  assert.equal(context.output_type, "document");
+  assert.equal(context.output_content, prd.body);
+  assert.equal(Object.hasOwn(context, "tests_passing"), false);
+  assert.deepEqual(context.meta, { framework: "codex", gallivant_version: VERSION });
+  assert.deepEqual(context.criteria_attestations, contract.context.criteria_attestations);
+  showPayload(t, request);
 });
 
 test("green checks and a clear reviewer are not enough without a valid receipt: a receipt round starts", async () => {
@@ -281,6 +448,49 @@ test("an unreachable evaluator retries without spending a round, then stops with
   assert.equal(state.get(id).reason, "stuck");
   assert.match(state.get(id).last.event, /completion gate.*ECONNREFUSED/);
   assert.equal(runner.started.length, 0, "an infrastructure failure must not spend a fixer run");
+});
+
+test("budget expiry between evaluator chunks defers completion without counting as a failure", async t => {
+  let monotonicTime = 0, expireBudget = true, lastOutput;
+  t.mock.method(performance, "now", () => monotonicTime);
+  const retry = { op: COMPLETION_GATE, count: 1, error: "earlier evaluator failure" };
+  const parts = [];
+  const w = world({ retry, rereview: { at: at(0), nudged: false } }, {
+    pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: receiptBlock() }),
+    reviews: clearReviewer(),
+  }, { fetch: async (_url, { body }) => {
+    const { context } = JSON.parse(body);
+    parts.push(context.meta.output_scan.part);
+    lastOutput = context.output_content;
+    return { ok: true, status: 200, json: async () => {
+      if (expireBudget) monotonicTime += 60_000;
+      return allowResponse;
+    } };
+  } });
+  w.gh.prDiff = async () => "diff --git a/output.txt b/output.txt\n--- a/output.txt\n+++ b/output.txt\n@@ -1 +1,2 @@\n+" +
+    "z".repeat(MAX_POLICY_BYTES) + "\n+last line\n";
+  w.clock.advance(4);
+  for (let i = 0; i < 6; i++) {
+    await w.tick.tick();
+    assert.equal(w.entry().state, STATES.prOpen);
+    assert.deepEqual(w.entry().retry, retry);
+    assert.equal(w.entry().review_next_at, w.clock.now() + CONFIG.poll_seconds * 1000);
+    assert.equal(parts.length, i + 1);
+    assert.equal(parts.at(-1), 0, "the first chunk passed before the budget expired");
+    assert.deepEqual(await w.tick.tick(), [], "the scheduler waits until the next due observation");
+    w.clock.advance(CONFIG.poll_seconds / 60);
+  }
+  assert.deepEqual(w.notify.sent, []);
+  assert.ok(!w.gh.calls.some(c => c[0] === "addLabel"));
+  expireBudget = false;
+  await w.tick.tick();
+  assert.equal(parts[6], 0, "the next decision checks the complete output");
+  assert.ok(parts.at(-1) > 0);
+  assert.match(lastOutput, /last line$/);
+  assert.equal(w.entry().state, STATES.ready);
+  assert.equal(w.entry().retry, null);
+  assert.equal(w.runner.started.length, 0);
+  assert.deepEqual(w.notify.sent, [["ready", 142]]);
 });
 
 test("a current-head Codex clean comment and a large output reach ready after a transient gate failure", async () => {

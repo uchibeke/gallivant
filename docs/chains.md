@@ -35,8 +35,9 @@ up the existing daemon if needed. The daemon starts the first task, uses the ord
 then waits for the merge. Each successor starts in its own checkout from the updated base. A final merge completes
 the chain; closing any milestone's PR without merging stops it.
 
-The scope is deliberately linear: one repository, one base, one active milestone per chain. There is no dependency
-graph, stacked-PR mode or automatic merge. Unrelated tasks and other chains can run independently.
+Chain dispatch is linear, with one repository, one base and one active milestone per chain. Unrelated tasks and
+other chains can run independently. Use local validation to inspect JSON or YAML dependency graphs. See
+[declarative dependency plans](dependency-plans.md).
 
 ## Continue after an existing PR
 
@@ -60,6 +61,38 @@ or missing merge ancestry stops dispatch. Retry and resnapshot cannot replace th
 new chain to change it. Progress counts only the newly queued milestones and displays the predecessor separately.
 Keep the predecessor registered until the chain finishes. Run a version supporting `--after` on every coordinator
 using this home; do not downgrade while these chains remain active.
+
+## Review work after a future milestone
+
+Use `--after-chain NAME` to reference a producer's current terminal boundary.
+Use `--after-node NAME:NODE` for one exact task, including a qualified ID such
+as `checks/unit`. Both commands take one or more ready PRDs. Run the command
+without `--approve` to review, then repeat it with `--approve DIGEST` through
+the qualified operator ingress. The saved request freezes the producer instance,
+node contracts and authorization. A subsequent PR binds to its original start.
+Work appended to the producer leaves the saved boundary unchanged.
+For example, review the command below while the `foundation` chain's final
+task is still queued.
+
+```sh
+gallivant chain rollout --after-chain foundation docs/prds/rollout.md
+```
+
+The consumer waits for that task's original integration and settled closeout.
+A hold or unmerged closure keeps the dependency waiting, and a force-push that
+removes its merge invalidates the evidence for new starts.
+
+These commands require the protected operator boundary. An approval with
+positive graph capacity can dispatch once the exact producer receipts qualify.
+The ordinary PRD-path and `--after` commands use the shared author limits and
+retain their linear progression. [Dependency plan dispatch](dependency-plans.md#dispatch-and-integration)
+
+`plan migration` previews a legacy checkpoint. In a qualified namespace,
+`plan migration --approve DIGEST` seals the reviewed version and references
+while keeping original chain approvals, pending claims and execution ownership.
+Review again if the checkpoint moved. The coordinator reads the legacy
+checkpoint through the linear graph adapter and retains the original claim
+and run identities.
 
 ## Inspect progress
 
@@ -85,6 +118,10 @@ security requirements. Both sides must be inspected, any superseded task edit ex
 
 Repairing or pushing a conflict never starts a successor. Remote ancestry, new-head CI, required reviewer clearance
 and the completion gate must pass before readiness; the host must then prove integration into the planned base.
+Qualified repair journals keep their pinned base through later commits to the
+base branch. A later repair needs separate eligibility within the same task
+budget. A paused journal protects the checkout and private backups even when an
+operator has already merged the PR.
 A maintainer can merge before Gallivant records readiness. Once the owned author has settled and the host proves
 that exact PR merged into the planned base, Gallivant closes the run and releases its successor, including after
 a conflict repair. Missing CI, review or APort completion evidence remains unverified; observing your merge never
@@ -127,6 +164,8 @@ gallivant chain launch --retry
 Retry does not approve edited briefs, reset iteration counts, or turn an unmerged PR into a satisfied dependency.
 It applies only to a stopped chain. If you reopen a closed PR and want Gallivant to continue its review loop, register
 that PR again before retrying the chain; a locally `done` run is not resumed merely by reopening its GitHub PR.
+Chain and approved YAML plan launches use Git and host operation timeouts. The standalone coordinator keeps polling existing tasks
+during checkout and revalidates the chain's approval and predecessor merges before launching the author.
 If a daemon stopped during dispatch and cannot prove whether a session started, the chain stops for inspection.
 Check the chain detail, `gallivant why <handle>` when an entry exists, the run logs and `~/.gallivant/daemon.log`.
 Retry never clears an ambiguous pending-start claim. Do not delete claims or worktrees merely to force another
@@ -156,3 +195,10 @@ The [chain workspace](ui-chains.md) provides an ordered dependency list, saved
 merge evidence, task and PR links, and explicit review/confirmation for future
 retry, changed-input approval and cancellation. It uses the same chain services
 and merge gates as the CLI. New chains are still created with CLI intake.
+
+A maintainer can merge a predecessor while it is stopped. The coordinator checks the exact PR and base ancestry, waits for owned authors to cease and records the cleanup outcome before claiming a successor. A retained checkout can contain dirty work or a later milestone's inputs. It counts as settled cleanup. Inspect the predecessor with `gallivant why HANDLE` and the chain with `gallivant chain NAME`. A closed, unmerged PR leaves its successful-integration successor unclaimed.
+
+Chain and repository holds fence new successor claims, including claims that
+were already preparing when the hold changed. A running child keeps its
+independent lifecycle. Disposable overnight qualification also requires a
+separate authority-gated case that stays stopped. [Recovery qualification](recovery-qualification.md)

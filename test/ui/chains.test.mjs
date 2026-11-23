@@ -43,9 +43,14 @@ test("chain journey preserves selection, filters, PR and task context across roo
     assert.equal(await page.locator('[aria-current="step"]').textContent(), "search-index");
     await page.getByRole("link", { name: "Open task", exact: true }).click();
     assert.equal(new URL(page.url()).pathname, `${base}/run`);
+    await page.waitForFunction(() => document.getElementById("workspace-state").textContent.startsWith("Task snapshot current"));
     await page.getByRole("link", { name: `Back to chain ${CHAIN}`, exact: true }).click();
-    assert.equal(new URL(page.url()).searchParams.get("cq"), "search");
-    assert.equal(new URL(page.url()).searchParams.get("cs"), "active");
+    const returned = new URL(page.url());
+    assert.equal(returned.pathname, `${base}/chains`);
+    assert.equal(returned.searchParams.get("chain"), CHAIN);
+    assert.equal(returned.searchParams.get("milestone"), TASK);
+    assert.equal(returned.searchParams.get("cq"), "search");
+    assert.equal(returned.searchParams.get("cs"), "active");
     assert.equal(await page.locator('[aria-current="step"]').textContent(), "search-index");
     await page.getByRole("link", { name: "migration-rollout", exact: true }).click();
     assert.match(await page.locator(".milestone-detail").textContent(), /Wait for milestone 2 to merge/);
@@ -53,6 +58,39 @@ test("chain journey preserves selection, filters, PR and task context across roo
     await page.goBack(); assert.equal(await page.locator('[aria-current="step"]').textContent(), "search-index");
   }
   assert.equal(JSON.stringify(state.chains()), saved); assert.equal(hostReads(), reads, "GET navigation has no host calls");
+});
+
+test("legacy predecessor opens the saved anchor and PR on both mounts", { timeout: 30_000 }, async t => {
+  const { page, origin, state, hostReads } = await open(t);
+  const name = "after-search", milestone = "acme/atlas/predecessor", entry = state.get(TASK);
+  state.createChain({ name, repo: entry.repo, base: entry.base, status: "active", index: 0, created_at: NOW, updated_at: NOW,
+    after: { id: TASK, repo: entry.repo, base: entry.base, branch: entry.branch, pr: entry.pr, url: entry.url, createdAt: entry.created_at },
+    steps: [{ id: milestone, relPath: "docs/prds/predecessor.md" }] });
+  const saved = state.chains(), reads = hostReads();
+  for (const base of ["", "/gallivant"]) {
+    await page.goto(`${origin}${base}/chains?chain=${name}&milestone=${encodeURIComponent(milestone)}&cq=after&cs=active&theme=light`);
+    const selected = page.url(), detail = page.locator(".milestone-detail"), prereqs = detail.locator(".prerequisite-list");
+    const predecessorPR = prereqs.getByRole("link", { name: "PR #42", exact: true });
+    assert.equal(await predecessorPR.getAttribute("href"), entry.url);
+    assert.equal(await predecessorPR.getAttribute("rel"), "noopener noreferrer");
+    assert.equal(await predecessorPR.getAttribute("target"), "_blank");
+    await prereqs.getByRole("link", { name: TASK, exact: true }).click();
+    const link = new URL(page.url());
+    assert.equal(link.pathname, `${base}/plans`);
+    assert.equal(link.searchParams.get("node"), "predecessor-1");
+    assert.equal(link.searchParams.get("cq"), "after");
+    assert.equal(link.searchParams.get("cs"), "active");
+    assert.equal(link.searchParams.get("theme"), "light");
+    assert.equal(await page.locator('[aria-current="step"]').textContent(), "predecessor-1");
+    assert.match(await detail.textContent(), new RegExp(TASK));
+    assert.equal(await detail.getByRole("link", { name: "Open PR", exact: true }).getAttribute("href"), entry.url);
+    assert.equal(await page.getByText("The linked node is unavailable.", { exact: false }).count(), 0);
+    await page.goBack();
+    assert.equal(page.url(), selected);
+    assert.equal(await page.locator('[aria-current="step"]').textContent(), "predecessor");
+  }
+  assert.equal(hostReads(), reads);
+  assert.deepEqual(state.chains(), saved);
 });
 
 test("changed-brief review rejects a newer source and confirms the exact replacement once", { timeout: 60000 }, async t => {

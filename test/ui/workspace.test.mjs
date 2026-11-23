@@ -31,7 +31,7 @@ test("workspace separates canonical evidence, findings, execution metadata and s
   for (const base of ["", "/gallivant"]) {
     await page.goto(origin + path(base)); await ready(page);
     const summary = await page.locator("#workspace-summary").innerText();
-    for (const text of [TASK, RUN, "main", "delivery_ready", "round 1/5", "search-release", "10m ago", "Checks need attention"]) assert.ok(summary.includes(text), text);
+    for (const text of [TASK, RUN, "main", "delivery_ready", "round 1/5", "search-release", "12m ago", "Checks need attention"]) assert.ok(summary.includes(text), text);
     assert.equal(await page.locator("#workspace-activity").getAttribute("open"), null);
     const cards = page.locator(".evidence-card"); assert.equal(await cards.count(), 6);
     assert.match(await cards.nth(0).innerText(), /pending/); assert.match(await cards.nth(1).innerText(), /findings/);
@@ -41,6 +41,7 @@ test("workspace separates canonical evidence, findings, execution metadata and s
     await page.waitForFunction(() => document.querySelector("#artifact-list").textContent.includes("src/search/index.mjs"));
     const metadata = await page.locator("#workspace-execution-content").innerText();
     assert.match(metadata, /recorded-fixture-model/); assert.match(metadata, /current-fixture-session/); assert.match(metadata, /unknown/);
+    assert.match(await page.locator("#attempt-verification").innerText(), /No coordinator Verify results/);
     const summaryResponse = await page.request.get(`${origin}${base}/api/run/result?id=${encodeURIComponent(TASK)}&run=${RUN}&view=summary`);
     const resultSummary = await summaryResponse.json();
     assert.deepEqual(Object.keys(resultSummary), ["version", "taskId", "runId", "artifacts"]);
@@ -57,6 +58,7 @@ test("workspace separates canonical evidence, findings, execution metadata and s
   assert.match(await page.locator("#workspace-evidence-content").innerText(), /stale-head/);
   assert.match(await page.locator("#workspace-evidence-content").innerText(), /gate was skipped/);
   assert.match(await page.locator("#workspace-review-content").innerText(), /Historical review/);
+  assert.equal(await page.getByRole("heading", { name: "Task activity", exact: true }).count(), 1);
   for (const [zeroChecks, expected] of [[true, "not-configured"], [false, "not-observed"]]) {
     state.update(TASK, { reviewPolicy: { ...state.get(TASK).reviewPolicy, zeroChecks },
       reviewObservation: { head: "new-head", binding: "fixture-binding", checks: { count: 0, settled: true }, observedAt: NOW } });
@@ -90,6 +92,7 @@ test("historical attempt survives applied controls, refresh, reload and browser 
     await page.locator("#workspace-retry").click(); await ready(page);
     await page.reload(); await ready(page);
     assert.equal(await page.locator("#log").getAttribute("data-run"), OLD_RUN);
+    await page.locator("#workspace-activity > summary").click();
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Historical attempt output only"));
     await page.getByRole("link", { name: "Open latest attempt", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("run"), RUN);

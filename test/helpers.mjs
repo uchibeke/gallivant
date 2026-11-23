@@ -1,14 +1,15 @@
 import { normalizeCheck } from "../lib/hosts/github.mjs";
 // Fakes for the tick's dependencies. Each records what it was asked so a test can assert on calls, and each is
 // controllable so a test can move the world (a review arrives, a run ends, time passes).
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { silentLog } from "../lib/log.mjs";
 import { DEFAULT_DELIVERABLE, DEFAULTS } from "../lib/config.mjs";
 import { NO_IDENTITY } from "../lib/identity.mjs";
 import { MIN_VERSIONS } from "../lib/harness.mjs";
+export { fixtureHome as tempHome } from "./owned-fixtures.mjs";
+import { fixtureHome as tempHome } from "./owned-fixtures.mjs";
 
 /** Real executable probes, no installed harness or model calls. Also records which preflight ran first. */
 export function harnessBin(dir, harness = "codex", { version = MIN_VERSIONS[harness], signedIn = true, versionExit = 0, signInOutput = null } = {}) {
@@ -55,6 +56,9 @@ export const CONFIG = {
   repos: ["acme/widget"],
 };
 
+// Keep host load and memory independent of fake dispatch while retaining native mount checks.
+export const FIXTURE_HEADROOM = Object.freeze({ minimum_memory_bytes: 0, maximum_load_per_cpu: 0 });
+
 export const T0 = "2026-09-24T02:00:00.000Z";
 export const at = (minutesAfter, base = T0) => new Date(Date.parse(base) + minutesAfter * 60_000).toISOString();
 
@@ -63,7 +67,6 @@ export function makeClock(startIso = T0) {
   return { now: () => t, advance: min => { t += min * 60_000; }, set: iso => { t = Date.parse(iso); } };
 }
 
-export const tempHome = () => mkdtempSync(join(tmpdir(), "gallivant-test-"));
 
 export const user = (login, bot = false) => ({ login, type: bot ? "Bot" : "User" });
 export const author = (login, bot = false) => ({ login, is_bot: bot });
@@ -129,7 +132,7 @@ export function fakeRunner(clock) {
     root: "/tmp/fake-runs",
     started: runs,
     start(name, cmd, args, opts) {
-      if (cur && cur.running) throw Object.assign(new Error("busy"), { code: "BUSY" });
+      if (cur && cur.running) throw Object.assign(new Error("busy"), { code: "BUSY", dispatchNotSent: true });
       cur = { id: `${runs.length + 1}-${name}`, name, cmd, args, opts, pid: 1, startedAt: clock.now(), exit: null, running: true, lines: [] };
       runs.push(cur);
       return { id: cur.id, pid: 1, startedAt: cur.startedAt };

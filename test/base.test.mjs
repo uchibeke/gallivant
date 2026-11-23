@@ -184,6 +184,7 @@ function startWorld({ repos = [], defaultBranch = "main", branches = ["main", "s
   const created = [];
   const asked = [];
   const prompts = [];
+  const snapshots = new Map();
   const ctx = {
     home, config, state: makeState(home), log: silentLog,
     gh: {
@@ -193,8 +194,8 @@ function startWorld({ repos = [], defaultBranch = "main", branches = ["main", "s
     },
     git: { toplevel: async () => repoDir, create: async spec => { created.push(spec); return worktree; } },
     runnerFor: () => { const r = fakeRunner(clock); const orig = r.start; r.start = (n, c, a, o) => { prompts.push(a.at(-1)); return orig(n, c, a, o); }; return r; },
-    writePrd: () => {},
-    readPrd: () => GOOD_PRD,
+    writePrd: (id, text) => snapshots.set(id, text),
+    readPrd: id => snapshots.get(id) ?? null,
     credential: async ({ host = "github.com" } = {}) => ({ token: "t", source: "github_token_file", host }),
     identity: fakeIdentity(),
   };

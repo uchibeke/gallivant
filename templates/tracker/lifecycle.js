@@ -21,13 +21,13 @@ function trackerLifecycle() {
     arm();
     return () => { clearTimeout(task.timer); timers.delete(task); };
   };
-  const read = async (url, failure, timeoutMs = 10_000) => {
+  const read = async (url, failure, timeoutMs = 10_000, signal = null) => {
     const request = new AbortController();
     requests.add(request);
     const deadline = setTimeout(() => request.abort(), timeoutMs);
     try {
-      const response = await fetch(url, { cache: "no-store", signal: request.signal });
-      if (!response.ok) throw new Error(failure);
+      const response = await fetch(url, { cache: "no-store", signal: signal ? AbortSignal.any([request.signal, signal]) : request.signal });
+      if (!response.ok) throw Object.assign(new Error(failure), { status: response.status });
       return await response.json();
     }
     finally { clearTimeout(deadline); requests.delete(request); }
@@ -64,4 +64,45 @@ function trackerLifecycle() {
     // A POST is never replayed: settle its original response after restoration.
     whenActive: () => stopped && cached ? new Promise(resolve => waiting.add(resolve)) : Promise.resolve(!stopped),
   };
+}
+
+async function trackerControlPost(url, input, token, timeoutMs = 15000) {
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'POST', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', 'X-Gallivant-Token': token }, body: JSON.stringify(input),
+    });
+    const data = await response.json();
+    if (!response.ok) throw Object.assign(new Error(data.error || 'Request refused. Refresh and review again.'),
+      { refused: response.status >= 400 && response.status < 500, code: data.code });
+    return data;
+  } finally { clearTimeout(timer); }
+}
+
+// Keyed nodes and native details survive. Never replace the list or an open disclosure.
+const snapshotKey = node => node.nodeType === 1 ? node.getAttribute("data-key") : null;
+function patchSnapshot(current, next) {
+  if (current.nodeType === Node.TEXT_NODE) {
+    if (current.data !== next.data) current.data = next.data;
+    return;
+  }
+  if (current.nodeType !== Node.ELEMENT_NODE) return;
+  for (const attr of [...current.attributes]) {
+    if (current.tagName === "DETAILS" && attr.name === "open") continue;
+    if (!next.hasAttribute(attr.name)) current.removeAttribute(attr.name);
+  }
+  for (const attr of next.attributes) {
+    if (current.tagName === "DETAILS" && attr.name === "open") continue;
+    if (current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
+  }
+  const keyed = new Map([...current.childNodes].filter(snapshotKey).map(node => [snapshotKey(node), node]));
+  let cursor = current.firstChild;
+  for (const child of next.childNodes) {
+    let existing = snapshotKey(child) ? keyed.get(snapshotKey(child)) : cursor && !snapshotKey(cursor) && cursor.nodeType === child.nodeType && cursor.nodeName === child.nodeName ? cursor : null;
+    if (!existing) { existing = child.cloneNode(true); current.insertBefore(existing, cursor); }
+    else { if (existing !== cursor) current.insertBefore(existing, cursor); patchSnapshot(existing, child); }
+    cursor = existing.nextSibling;
+  }
+  while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
 }

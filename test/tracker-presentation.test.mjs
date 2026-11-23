@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { taskPresentation, presentationDetail } from "../lib/tracker/presentation.mjs";
+import { taskPresentation, presentationDetail, readinessLabel } from "../lib/tracker/presentation.mjs";
 import { providerPresentation } from "../lib/tracker/provider_presentation.mjs";
 import { instant, attemptPresentation } from "../lib/tracker/presentation_time.mjs";
 import { taskWindow } from "../lib/tracker/presentation_html.mjs";
@@ -60,6 +60,48 @@ test("completion projection never upgrades exit, skipped receipts, stale heads, 
   const stale = project({ entry: { ...base(), reviewObservation: { head: "old", binding: "old", checks: { settled: true }, external: "clear" },
     reviewPolicy: { version: 1, mode: "first-party-required" }, firstPartyReview: { binding: "old", status: "completed", result: { verdict: "clear" } } } });
   assert.equal(stale.review.status, "stale-head"); assert.equal(stale.phase.id, "unknown");
+});
+
+test("acceptance and claimed readiness stay bound to the saved head, brief and evaluator", () => {
+  const entry = { ...base(), prd_fingerprint: "fixture-brief", completionEvidence: { acceptance: {
+    allow: false, source: "local", repository: "acme/widget", pr: 12, base: "main",
+    head: "head", binding: "binding", brief: "fixture-brief", observedAt: START,
+  } } };
+  assert.equal(project({ entry }).acceptance.status, "denied");
+  assert.equal(project({ entry }).acceptance.source, "local");
+  for (const patch of [{ cursor: { fixed_sha: "new-head" } }, { reviewBinding: "different-policy" },
+    { prd_fingerprint: "edited-brief" }, { base: "different-base" }]) {
+    assert.equal(project({ entry: { ...entry, ...patch } }).acceptance.status, "stale-head");
+  }
+  assert.equal(project({ entry, divergence: { reason: "prd-changed" } }).acceptance.status, "stale-head");
+  assert.equal(readinessLabel(project({ entry: qualified(), divergence: { reason: "prd-changed" } })), "stale-head");
+  const old = { id: "earlier", running: true, startedAt: START, execution: { transport: "remote", acceptance: "unknown" } };
+  const after = project({ entry: { ...qualified(), last: { run: "current", exit: 0 } }, run: old });
+  assert.equal(after.attempt.id, "earlier");
+  assert.equal(after.ownership, "settled"); assert.equal(after.outcome, "ready");
+});
+
+test("requested cancellation and dispatch restrictions differ from settled cancellation", () => {
+  const entry = { ...base(), state: "needs-human" };
+  const pending = project({ entry: { ...entry, dispatch_stopped: "cancellation-requested" } });
+  assert.equal(pending.outcome, "active");
+  assert.equal(pending.attention.title, "Cancellation unconfirmed");
+  const stopped = project({ entry: { ...entry, dispatch_stopped: "recovery-profile-revoked" } });
+  assert.equal(stopped.outcome, "blocked");
+  assert.equal(project({ entry: { ...entry, reason: "cancelled", dispatch_stopped: "cancellation-requested" } }).outcome, "cancelled");
+});
+
+test("recorded Verify passes only qualify when the selected candidate checkpoint settled", async () => {
+  const { workspaceVerification } = await import("../lib/tracker/workspace.mjs");
+  const head = "a".repeat(40);
+  const evidence = { head, source: "coordinator-executed", exit: 0, output: "PRIVATE VERIFY OUTPUT",
+    sandbox: { version: 1, driver: "sandbox-exec", filesystem: "checkout-and-runtime", network: "disabled", probe: "passed" } };
+  const record = { version: 1, head, evidence: [evidence] };
+  assert.deepEqual(workspaceVerification(record, null), { head, passed: 1, failed: 0, status: "partial" });
+  assert.equal(workspaceVerification(record, { appliedHead: head, phase: "published" }).status, "passed");
+  assert.equal(workspaceVerification({ ...record, evidence: [{ ...evidence, exit: 1 }] }, { appliedHead: head, phase: "blocked" }).status, "failed");
+  assert.equal(workspaceVerification({ ...record, evidence: [] }, { appliedHead: head, phase: "verified" }).status, "unavailable");
+  assert.doesNotMatch(JSON.stringify(workspaceVerification(record, null)), /PRIVATE VERIFY OUTPUT/);
 });
 
 test("provider observations distinguish pending, unchecked, quota, dispatch and credentials without inferring access", () => {
@@ -196,7 +238,7 @@ test("overview, detail, CLI and task summaries share facts and retain API fields
   const entry = { ...base(), state: "needs-human", reason: "checks-red" }, id = "acme/widget/task";
   const ctx = { home, state: { entries: () => [[id, entry]], get: () => entry, chains: () => [] }, config: CONFIG, clock: { now: () => Date.parse(NOW) }, log: silentLog, runnerFor: () => ({ current: () => null }) };
   const m = model(ctx), row = m.needs_you[0], p = row.presentation;
-  const view = taskView({ repo: entry.repo, completion: completionView(null, entry) }, { entry, maxIterations: CONFIG.max_iterations, now: NOW, controls: controlAvailability(entry, null, {}) });
+  const view = taskView({ repo: entry.repo, implementation: { id }, completion: completionView(null, entry) }, { entry, maxIterations: CONFIG.max_iterations, now: NOW, controls: controlAvailability(entry, null, {}) });
   assert.deepEqual(view.presentation, p);
   assert.deepEqual(modelSummary(view).presentation, p); assert.deepEqual(taskListSummary(view).presentation, p);
   for (const key of ["id", "handle", "label", "detail", "state", "reason", "round", "since", "base", "run"]) assert.ok(Object.hasOwn(row, key), key);
@@ -267,11 +309,23 @@ test("workspace metadata stays bound to the selected attempt and preserves hoste
   const p = taskPresentation({ entry });
   const old = workspaceProjection({ id: "task", entry, run: { id: "old" }, presentation: p });
   assert.equal(old.execution.model, null); assert.equal(old.execution.session, null); assert.equal(old.execution.costUsd, null);
+  const unknown = workspaceProjection({ id: "task", entry, run: { id: "old" }, presentation: p,
+    capabilities: { continuation: "current-only", cost: { source: "current-ledger" }, controls: { cancel: true } } });
+  assert.equal(unknown.execution.continuation, null);
+  assert.equal(unknown.execution.costSource, null);
+  assert.equal(unknown.execution.cancellation, "unknown");
   const hosted = workspaceProjection({ id: "task", entry, run: { id: "old", execution: { provider: "codex-cloud", model: "recorded-model", sessionId: "old-session", costUsd: 0.5, usage: { input_tokens: 12, output_tokens: 3, arbitrary: "must not leak" } } }, presentation: p, capabilities: capabilitiesFor("codex-cloud") });
   assert.equal(hosted.execution.available, "unavailable"); assert.equal(hosted.execution.cancellation, "unavailable");
   assert.deepEqual(hosted.execution.usage, { input: 12, output: 3, total: null });
   const html = workspaceExecution(hosted);
   assert.match(html, /recorded-model/); assert.match(html, /old-session/); assert.doesNotMatch(html, /new-model|current-session|must not leak/);
+});
+
+test("the run history adapter uses saved attempt identity before the current task harness", async () => {
+  const { attemptHarness } = await import("../lib/tracker/runs.mjs");
+  assert.equal(attemptHarness({ bin: "/approved/bin/claude" }), "claude");
+  assert.equal(attemptHarness({ execution: { provider: "codex-cloud" } }, "codex"), "codex-cloud");
+  assert.equal(attemptHarness({ bin: "/runtime/launcher" }), "unknown");
 });
 
 test("workspace links reject unsafe schemes, embedded credentials and encoded tokens", async () => {

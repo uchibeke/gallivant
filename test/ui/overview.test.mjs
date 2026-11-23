@@ -54,7 +54,7 @@ test("overview prioritizes decisions with qualified readiness, meaningful summar
       assert.equal(await task.locator("button[data-action]").count(), 0, "mutations stay in protected task controls");
     }
     assert.match(await row(page, ids[4]).textContent(), /automatic coordinator work/);
-    assert.match(await row(page, ids[2]).textContent(), /2026-09-24T14:10:00.000Z/);
+    assert.equal(await row(page, ids[2]).locator("time").getAttribute("datetime"), state.get(ids[2]).created_at);
     assert.match(await row(page, ids[6]).textContent(), /7\/8/);
   }
   assert.equal(JSON.stringify(state.entries()), saved);
@@ -72,7 +72,7 @@ test("stopped tasks with missing owned runs stay actionable without enabling ano
     assert.equal(await task.evaluate(el => el.closest("section").dataset.kind), "attention");
     assert.equal(await task.locator(".task-decision strong").textContent(), "Execution stop unconfirmed");
     assert.match(await task.locator(".task-decision p").textContent(), /reconcile its status before starting another writer/);
-    assert.equal(await task.locator("time").getAttribute("datetime"), at);
+    assert.equal(await task.locator("time").getAttribute("datetime"), state.get(id).created_at);
     const snapshot = await (await context.request.get(`${origin}${base}/api/status`)).json();
     const p = snapshot.needs_you.find(task => task.id === id).presentation;
     assert.equal(p.phase.id, "reconciling");
@@ -98,7 +98,7 @@ test("all overview filters and page context survive task navigation, theme, relo
     const params = new URLSearchParams({ q: "brief", repo: LONG_REPO, phase: "operator_attention", harness: "codex", attention: "attention", chain: "release", theme: "dark" });
     await page.goto(`${origin}${base}/?${params}`);
     assert.equal(await page.locator("[data-task-id]").count(), 1);
-    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*8 registered/);
+    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*8 visible/);
     for (const [key, value] of params) if (key !== "theme") assert.equal(await page.locator(`#overview-${key}`).inputValue(), value);
     await page.locator("[data-task-id] h3 a").click();
     await page.getByRole("link", { name: "Overview", exact: true }).click();
@@ -127,7 +127,7 @@ test("snapshot refresh reconciles filter choices without replacing drafts, selec
   const repo = "acme/new-repository", id = `${repo}/new-task`, chain = "next-release", harness = "fixture-harness";
   // A completed synthetic chain permits registration/removal without any dispatch.
   state.createChain({ name: chain, repo, base: "main", status: "done", index: 0, steps: [{ id }] });
-  const entry = { ...state.get(ids[7]), repo, harness, pr: 52, url: `https://github.com/${repo}/pull/52`,
+  const entry = { ...state.get(ids[7]), recovery_record: undefined, repo, harness, pr: 52, url: `https://github.com/${repo}/pull/52`,
     reviewObservation: { head: "head", binding: "binding", external: "waiting", checks: { count: 1, settled: false }, observedAt: NOW } };
   const choices = { repo, phase: "ci_wait", harness, chain };
   for (const base of ["", "/gallivant"]) {
@@ -207,7 +207,8 @@ test("pending predecessor chains appear in refreshed choices and filters alongsi
     await page.locator("#overview-chain").selectOption(name);
     await page.getByRole("button", { name: "Apply filters", exact: true }).click();
     await page.waitForURL(url => url.searchParams.get("chain") === name);
-    assert.equal(await page.locator("[data-task-id]").count(), 1);
+    assert.equal(await page.locator("[data-task-id]").count(), 3);
+    assert.equal(await page.locator('[data-task-id][data-outcome="planned"]').count(), 2);
     assert.equal(await row(page, id).count(), 1);
     await row(page, id).locator("h3 a").click();
     await page.getByRole("link", { name: "Overview", exact: true }).click();
@@ -217,9 +218,10 @@ test("pending predecessor chains appear in refreshed choices and filters alongsi
     // Once the recorded predecessor merge is observed, only owned membership remains.
     state.updateChain(name, { after: { ...after, merged: { sha: "a".repeat(40), at: NOW } } });
     await page.locator("#overview-refresh").click(); await updated(page);
-    assert.equal(await page.locator("[data-task-id]").count(), 0);
+    assert.equal(await page.locator("[data-task-id]").count(), 2);
+    assert.equal(await row(page, id).count(), 0);
     assert.equal(await page.locator("#overview-chain").inputValue(), name);
-    assert.match(await page.locator("#overview-chain option:checked").textContent(), /no current tasks/);
+    assert.equal(await page.locator("#overview-chain option:checked").textContent(), name);
     const refreshed = await (await context.request.get(`${origin}${base}/api/status`)).json();
     assert.deepEqual(refreshed.needs_you.find(row => row.id === id).presentation.chains.map(chain => chain.name), ["release"]);
     assert.equal(JSON.stringify(state.entries()), saved);
@@ -264,7 +266,7 @@ test("overview retains its last snapshot on failed and slow reads with bounded r
 
 test("keyed refresh preserves disclosure, selection, focus, scroll and meaningful age", { timeout: 30_000 }, async t => {
   const { page, origin, state, ids } = await open(t);
-  await page.goto(`${origin}/`);
+  await page.goto(`${origin}/?sort=recent`);
   const task = row(page, ids[0]), details = task.locator(".task-context");
   await details.locator(":scope > summary").click();
   await task.locator(".technical-reason > summary").click();
@@ -295,12 +297,14 @@ test("keyed refresh preserves disclosure, selection, focus, scroll and meaningfu
   assert.equal(await page.evaluate(() => scrollY), y);
   // Structural changes while reading are offered, never forced into the scrolled list.
   await page.locator("#main").evaluate(el => el.focus({ preventScroll: true }));
-  state.update(ids[0], { state: "pr-open", reason: null, activity_at: "2026-09-24T14:29:00.000Z" });
+  state.update(ids[0], { state: "pr-open", reason: null, verified_progress: { kind: "verified-push", head: "next-head", at: "2026-09-24T14:29:00.000Z" } });
   await page.clock.runFor(10_000); await updated(page);
   assert.equal(await page.evaluate(() => scrollY), y);
   assert.equal(await details.getAttribute("open"), "");
   await page.locator("#overview-apply").click();
   assert.match(await page.locator("#overview-status").textContent(), /^Current/);
+  assert.equal(await page.locator("[data-task-id]").first().getAttribute("data-task-id"), ids[0]);
+  assert.equal(await task.locator("time").getAttribute("datetime"), "2026-09-24T14:29:00.000Z");
   assert.equal(await page.locator("[data-task-id]").count(), 8);
 });
 

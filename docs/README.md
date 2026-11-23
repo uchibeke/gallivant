@@ -22,11 +22,13 @@ requirements and checks.
 | Write a brief with acceptance criteria, source files and verification commands | [PRD contract](prd.md) |
 | Find commands, monitor progress, message or resume a run | [Commands](commands.md) |
 | Configure repositories, credentials, harnesses and execution limits | [Configuration](config.md) |
+| Mirror significant task transitions to Vercel Board | [Board collaboration](collaboration.md) |
 | Request and verify Codex reviews against the current commit | [Codex review procedure](codex-review.md) |
 | Use the local dashboard and understand product boundaries | [Application](app.md) |
 | Run coding work on an API-backed hosted environment | [OpenAI Agents API](openai-agents.md) |
 | Understand the unavailable Codex Cloud dispatch and its required qualification | [Codex Cloud](codex-cloud.md) |
-| Queue dependent tasks with a human merge between steps | [Chains](chains.md) |
+| Queue dependent tasks with a human merge between steps | [Chains](chains.md) · [Dependency plans](dependency-plans.md) |
+| Run the graph and served-browser aggregate or check signed native and live receipts | [Dependency delivery qualification](dependency-plan-qualification.md) |
 | Understand permissions, credentials and completion checks | [Guardrails](guardrails.md) |
 | Keep Node, Git and dependency execution consistent | [Runtime environment](runtime-environment.md) |
 | Diagnose DNS/HTTPS failures and understand automatic recovery | [Network recovery](network-recovery.md) |
@@ -34,6 +36,7 @@ requirements and checks.
 | Collect review feedback and understand why learned-rule activation is unavailable | [Learning](learning.md) |
 | Integrate the shared services or package a task-delivery plugin | [Task delivery](task-delivery.md) |
 | Qualify a specific task-delivery plugin release and its actual host evidence | [Release qualification](release-qualification.md) |
+| Inspect recovery evidence, canary stages and remaining gates | [Recovery qualification](recovery-qualification.md) |
 | Understand preparation isolation and provider capabilities | [Preparation](preparation.md) |
 | Understand durable runs, continuation, cancellation and publication | [Execution](execution.md) |
 | Understand module ownership and the overall design | [Architecture](architecture.md) |

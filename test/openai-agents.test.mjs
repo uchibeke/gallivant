@@ -7,12 +7,17 @@ import { execFileSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { makeExecution } from "../lib/execution.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
+import { makeRecoveryCooldowns } from "../lib/recovery_cooldown.mjs";
 import { capabilitiesFor } from "../lib/harness.mjs";
 import { makeAgentsTransport, checkAgentsAccess } from "../lib/openai_agents.mjs";
 import { validateAgentsConfig } from "../lib/openai_agents_config.mjs";
 import { agentsHttp } from "../lib/openai_agents_http.mjs";
 import { contentHash, prepareAgentsSources, AGENTS_WORKSPACE_HELPER } from "../lib/openai_agents_sources.mjs";
 import { start } from "../lib/commands/start.mjs";
+import { createCollaborationService, withCollaborationState } from "../lib/collaboration.mjs";
+import { collaborationSettings } from "../lib/collaboration_contract.mjs";
+import { createCollaborationStore } from "../lib/collaboration_store.mjs";
+import { createBoardCollaborationAdapter } from "../lib/board_collaboration.mjs";
 import { agentsInput } from "../lib/openai_agents_input.mjs";
 import { publicationPolicyOf, assertPublicationPaths } from "../lib/work_artifacts.mjs";
 import { parsePrd } from "../lib/prd.mjs";
@@ -23,7 +28,7 @@ import { CONFIG, GOOD_PRD, fakeCredential, fakeIdentity, fakeNotify, fakeGit, fa
 import { requestControl } from "../lib/control.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { doctor } from "../lib/commands/doctor.mjs";
-import { routes } from "../lib/commands/serve.mjs";
+import { handle } from "../lib/commands/serve.mjs";
 import { checkHarness } from "../lib/probe.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
@@ -455,8 +460,9 @@ async function launchAccess(f, fn) {
 }
 function launchPage(f) {
   let code, html;
-  routes["GET /run"](f.ctx, { headers: { host: "127.0.0.1:8791" }, socket: { remoteAddress: "127.0.0.1", localPort: 8791 } },
-    { writeHead: value => { code = value; }, end: value => { html = value; } }, new URL(`http://127.0.0.1/run?id=${encodeURIComponent(f.id)}`), {});
+  handle(f.ctx, { method: "GET", url: `/run?id=${encodeURIComponent(f.id)}`,
+    headers: { host: "127.0.0.1:8791" }, socket: { remoteAddress: "127.0.0.1", localPort: 8791 } },
+    { writeHead: value => { code = value; }, end: value => { html = value; } });
   assert.equal(code, 200); return html;
 }
 test("managed readiness proves native isolation before API reads and doctor reports unsupported hosts", async t => {
@@ -900,31 +906,36 @@ for (const status of [401, 429]) test(`HTTP ${status} preserves work and bounded
   for (let n = 0; n < 3; n++) { f.fail(status); await f.service().reconcile({ force: true }); }
   const before = f.calls.length; await f.service().reconcile({ force: true }); assert.equal(f.calls.length, before); assert.equal(f.service().current().execution.recoveryAction, "AGENTS_RECOVERY_REQUIRED"); assert.doesNotMatch(readFileSync(join(f.root, "execution.json"), "utf8"), /private provider error/);
 });
-test("Retry-After seconds and HTTP dates remain finite and bounded", async () => {
+test("Retry-After seconds and HTTP dates preserve finite server deadlines", async () => {
   const now = Date.parse("Sun, 06 Nov 1994 08:47:37 GMT"), clock = { now: () => now };
-  for (const [header, expected] of [["120", 120_000], [" 120 ", 120_000], ["0", 0], ["9".repeat(400), 300_000],
+  const lastDate = Date.parse("+275760-09-13T00:00:00.000Z");
+  for (const [header, expected] of [["120", 120_000], [" 120 ", 120_000], ["0", 0], ["9".repeat(400), lastDate - now],
     ["Sun, 06 Nov 1994 08:49:37 GMT", 120_000], ["Sunday, 06-Nov-94 08:49:37 GMT", 120_000], ["Sun Nov  6 08:49:37 1994", 120_000],
-    ["Sun, 06 Nov 1994 09:49:37 GMT", 300_000], ["Sun, 06 Nov 1994 07:49:37 GMT", 0],
+    ["Sun, 06 Nov 1994 09:49:37 GMT", 3_720_000], ["Sun, 06 Nov 1994 07:49:37 GMT", 0],
     [null, 0], ["", 0], ["invalid", 0], ["-1", 0], ["1.5", 0], ["1e3", 0], ["Infinity", 0], ["11/06/2094", 0], ["Sun, 99 Nov 1994 08:49:37 GMT", 0]]) {
     const http = agentsHttp({ credential: () => "offline-test-key", clock, fetcher: async () => new Response("private provider error", { status: 429, headers: header === null ? {} : { "retry-after": header } }) });
     await assert.rejects(http.request("/models/fixture-model"), error => { assert.equal(error.code, "AGENTS_THROTTLED"); assert.equal(error.retryAfterMs, expected, String(header)); return true; });
   }
 });
 test("Agents readiness carries HTTP-date throttling into shared account health after restart", async t => {
-  const f = fixture(), scope = [["openai-agents", config.account]], delay = 120_000;
+  const f = fixture(), scope = [["openai-agents", config.account]], delay = 3_600_000;
   const options = { home: f.root, clock: f.clock, jitter: () => 0, probe: (_provider, _account, signal) => checkAgentsAccess(config, { http: f.http, signal }) };
+  const health = () => makeProviderHealth({ ...options, cooldowns: makeRecoveryCooldowns({ home: f.root, clock: f.clock }) });
   f.failAt(`/models/${config.model}`, 429, new Date(f.clock.now() + delay).toUTCString());
-  await makeProviderHealth(options).refresh(scope);
+  await health().refresh(scope);
   const failure = makeProviderHealth(options).get(...scope[0]);
   assert.equal(failure.detail, "AGENTS_THROTTLED"); assert.equal(failure.retryAfterMs, delay); assert.equal(failure.nextAttemptAt, f.clock.now() + delay);
-  const calls = f.calls.length; f.clock.advance(delay - 1); await makeProviderHealth(options).refresh(scope); assert.equal(f.calls.length, calls);
-  f.clock.advance(1); await makeProviderHealth(options).refresh(scope); assert.equal(makeProviderHealth(options).get(...scope[0]).ok, true);
+  const reopened = health();
+  assert.equal(reopened.get(...scope[0]).code, "SERVICE_COOLDOWN");
+  assert.equal(reopened.get(...scope[0]).nextAttemptAt, f.clock.now() + delay);
+  const calls = f.calls.length; f.clock.advance(delay - 1); await reopened.refresh(scope); assert.equal(f.calls.length, calls);
+  f.clock.advance(1); await reopened.refresh(scope); assert.equal(health().get(...scope[0]).ok, true);
   assert.ok(f.calls.every(v => v.method === "GET")); assert.equal(f.sessions.size, 0);
   t.diagnostic(`readiness retry evidence: ${join(f.root, "provider-health.json")}`);
 });
-for (const [kind, delay] of [["http-date", 120_000], ["malformed", 20_000], ["capped", 300_000]]) test(`throttled ${kind} retry survives restart and defers coordinator polling`, async t => {
+for (const [kind, delay] of [["http-date", 120_000], ["malformed", 20_000], ["prolonged", 172_800_000]]) test(`throttled ${kind} retry survives restart and defers coordinator polling`, async t => {
   const f = fixture(), job = await f.service().submit(input), before = f.clock.now();
-  const header = kind === "http-date" ? new Date(before + delay).toUTCString() : kind === "malformed" ? "bad-delay" : "999999";
+  const header = kind === "http-date" ? new Date(before + delay).toUTCString() : kind === "malformed" ? "bad-delay" : String(delay / 1000);
   f.failAt(`/agents/sessions/${job.execution.sessionId}/events`, 429, header);
   await f.service().reconcile();
   const saved = readJson(join(f.root, "execution.json")).current.execution;
@@ -1191,29 +1202,115 @@ test("managed artifacts reach the single PR writer with actual file and current-
   await reconcileExecutionResult(ctx, { id: "acme/widget/task", entry, result, dir: f.service().dirOf(job.id) }); assert.equal(calls.length, 4);
 });
 
+test("initial remote launch failures open one owner item until the owner repairs and resumes", async () => {
+  for (const outcome of ["prepare", "submit", "reply-loss", "success"]) {
+    const f = launchFixture(), { ctx } = f, ownerPosts = [], resolutions = [];
+    const cfg = collaborationSettings({
+      adapter: "board", profile: "task-relay", channel: "work", needs_owner_channel: "owner", link_base_url: "https://tracker.example",
+      policy: { allow_us_storage: true, allow_board_managed_retention: true },
+    });
+    const handle = {
+      me: async () => ({ can: { work: ["post", "label"], owner: ["post", "label"] } }),
+      schema: async () => ({ id: cfg.schema }),
+      post: async (channel, item) => { if (channel === "owner") ownerPosts.push(item); return { id: item.id }; },
+      reply: async (_thread, item) => ({ id: item.id }),
+      label: async (id, change) => resolutions.push([id, change.set.state]),
+    };
+    const store = createCollaborationStore(f.root);
+    const adapter = createBoardCollaborationAdapter(cfg, { clientFor: async () => ({ handle, block: (_schema, data) => JSON.stringify(data) }) });
+    const connect = () => {
+      ctx.collaboration = createCollaborationService({ config: cfg, store, adapter, clock: f.clock });
+      ctx.state = withCollaborationState(makeState(f.root), ctx.collaboration);
+    };
+    connect();
+    await launchAccess(f, async () => {
+      if (outcome === "reply-loss") f.lose("/agents/sessions/sess-1/events");
+      const refused = outcome === "prepare" || outcome === "submit";
+      if (refused) ctx.executionFor = () => {
+        const execution = f.service(), original = execution[outcome];
+        execution[outcome] = request => unsupportedHost(() => original(request));
+        return execution;
+      };
+      const launch = start(ctx, { path: f.prdPath });
+      if (outcome === "success") await launch;
+      else await assert.rejects(launch, { code: refused ? "EXECUTION_VERIFICATION_SANDBOX" : "AGENTS_TRANSPORT" });
+      await ctx.collaboration.flush();
+      assert.equal(ownerPosts.length, refused ? 1 : 0, outcome);
+      if (!refused) {
+        if (outcome === "reply-loss") await makeTick(ctx).tickEntry(f.id, ctx.state.get(f.id));
+        const types = Object.values(store.read().deliveries).map(item => item.event.transition.type);
+        assert.deepEqual(types, ["accepted", "started"], outcome);
+        return;
+      }
+
+      const [item] = ownerPosts, event = JSON.parse(item.text);
+      assert.equal(item.labels.state, "open");
+      assert.equal(event.task.id, f.id);
+      assert.equal(event.transition.reason, outcome === "prepare" ? "launch-preparation" : "dispatch-refused");
+      assert.match(event.transition.requested_decision, /repair.*resume/i);
+      assert.ok(Date.parse(event.transition.expires_at) > f.clock.now());
+      assert.equal(new URL(event.links.task).searchParams.get("id"), f.id);
+      assert.equal(f.sessions.size, 0);
+      assert.deepEqual(resolutions, []);
+
+      connect();
+      await assert.rejects(resume(ctx, { handle: f.id }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+      await ctx.collaboration.flush();
+      assert.equal(ownerPosts.length, 1);
+      assert.deepEqual(resolutions, []);
+      ctx.executionFor = f.service;
+      await resume(ctx, { handle: f.id });
+      await ctx.collaboration.flush();
+      assert.equal(ctx.state.get(f.id).state, STATES.running);
+      assert.equal(ownerPosts.length, 1);
+      assert.deepEqual(resolutions, [[item.id, "resolved"]]);
+    });
+  }
+});
+
 for (const [fault, name] of [
   ["reply-loss", "initial launch reply loss remains registered for coordinator restart without a second implementation"],
   ["pre-send-refusal", "initial launch pre-send refusal remains registered for safe coordinator recovery"],
+  ["ledger-refusal", "initial dispatch without a ledger intent releases its slot and resumes the exact launch"],
   ["legacy-refusal", "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation"],
   ["prepare-refusal", "initial preparation refusal supports the shared operator control after repair and restart"],
 ]) test(name, async t => {
   const f = launchFixture(), { ctx, prdPath } = f, state = ctx.state;
   ctx.executionFor = () => {
     const service = f.service(), method = fault === "prepare-refusal" ? "prepare" : "submit", original = service[method];
-    if (fault !== "reply-loss") service[method] = request => unsupportedHost(() => original(request));
+    if (fault === "ledger-refusal") service.submit = async () => { throw Object.assign(new Error("dispatch input refused before reservation"), { code: "EXECUTION_INPUT" }); };
+    else if (fault !== "reply-loss") service[method] = request => unsupportedHost(() => original(request));
     return service;
   };
   await launchAccess(f, async () => {
     if (fault !== "reply-loss") {
-      await assert.rejects(start(ctx, { path: prdPath }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+      const code = fault === "ledger-refusal" ? "EXECUTION_INPUT" : "EXECUTION_VERIFICATION_SANDBOX";
+      await assert.rejects(start(ctx, { path: prdPath }), { code });
       const refused = makeState(f.root).get("acme/widget/task");
       assert.equal(refused.state, STATES.needsHuman); assert.equal(refused.reason, fault === "prepare-refusal" ? "launch-preparation" : "dispatch-refused");
       assert.equal(refused.last.run, null); assert.equal(refused.initial_dispatch.status, "unsubmitted");
       assert.equal(state.startClaim(f.id), null);
+      assert.equal(state.hasAuthorReservation(f.id), false);
       assert.equal(f.service().current(), null); assert.equal(f.service().state().allowance, undefined);
       assert.equal(f.sessions.size, 0); assert.equal(f.turns.size, 0);
       await makeTick({ ...ctx, state: makeState(f.root) }).tickEntry("acme/widget/task", refused);
       assert.equal(f.service().current(), null); assert.equal(f.sessions.size, 0);
+      if (fault === "ledger-refusal") {
+        await assert.rejects(resume(ctx, { handle: f.id }), { code });
+        assert.deepEqual(state.get(f.id).initial_dispatch, refused.initial_dispatch);
+        assert.equal(state.hasAuthorReservation(f.id), false);
+        const update = state.update;
+        state.update = (...args) => {
+          const saved = update(...args);
+          if (saved?.initial_dispatch?.status === "dispatching") throw new Error("dispatch marker acknowledgement lost");
+          return saved;
+        };
+        try { await assert.rejects(resume(ctx, { handle: f.id }), /dispatch marker acknowledgement lost/); }
+        finally { state.update = update; }
+        assert.deepEqual(state.get(f.id).initial_dispatch, refused.initial_dispatch);
+        assert.equal(state.hasAuthorReservation(f.id), false);
+        assert.deepEqual(f.service().state().operations, {});
+      }
       ctx.executionFor = f.service; ctx.state = makeState(f.root);
       if (fault === "legacy-refusal") ctx.state.update(f.id, { initial_dispatch: null });
       const page = launchPage(f), pagePath = join(f.root, "initial-controls.html"); writeFileSync(pagePath, page);
@@ -1242,6 +1339,7 @@ for (const [fault, name] of [
     }
     f.lose("/agents/sessions/sess-1/events"); await assert.rejects(start(ctx, { path: prdPath }), { code: "AGENTS_TRANSPORT" });
     const pending = makeState(f.root).get("acme/widget/task"); assert.ok(pending); assert.equal(pending.reason, "dispatch-intent"); assert.equal(pending.execution.acceptance, "unknown"); assert.ok(pending.last.run);
+    assert.equal(makeState(f.root).hasAuthorReservation(f.id), true);
     await assert.rejects(resume(ctx, { handle: f.id }), /no session to resume/);
     // A process crash can occur before the launcher copies the job into registry
     // state. The pre-I/O operation marker must still prove exact ownership.

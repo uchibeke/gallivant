@@ -253,10 +253,15 @@ for (const base of ["", "/gallivant"]) for (const action of ["answer", "resume",
   reject = false; world.failPreparation(null);
   const retried = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname.endsWith(`/api/task/intake/${action}`));
   await page.locator("#intake-retry").click();
-  const response = await retried, result = await response.json();
-  assert.equal(response.status(), 200, JSON.stringify(result));
-  if (action === "start") await page.waitForURL(url => url.pathname === `${base}/run`);
-  else await state(page, result.task.status);
+  const response = await retried;
+  assert.equal(response.status(), 200);
+  if (action === "start") {
+    // Chromium can discard the response body once Start navigates away.
+    await page.waitForURL(url => url.pathname === `${base}/run`);
+    const saved = taskStore(home).read(inputs[0].taskId);
+    assert.equal(saved.status, "started");
+    assert.equal(new URL(page.url()).searchParams.get("id"), saved.implementation.id);
+  } else await state(page, (await response.json()).task.status);
   assert.deepEqual(inputs[1], inputs[0], "explicit retry preserves the exact original payload and operation identity");
   assert.equal(inputs.length, 2); assert.equal(calls.start, action === "start" ? 1 : 0);
 });

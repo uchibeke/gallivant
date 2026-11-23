@@ -336,6 +336,11 @@ contains `--run`. Approve the visible ready revision with the separate start
 command above. The task service starts the daemon; `gallivant start` with no path also opens the dashboard.
 Read [task operations](tasks.md) for selected context, revisions, recovery and costs.
 
+New recovery recipes stay in observation mode until an operator pins a profile
+and admits the task, route and recipe to a qualified canary. Use `gallivant why
+HANDLE` to inspect a stopped task and `gallivant recovery drain` before changing
+runtimes. [Recovery qualification and rollout](recovery-qualification.md)
+
 ### From a written brief
 
 `new` uses the first configured harness. Pass `--harness` with another configured
@@ -363,6 +368,19 @@ with no path starts/reuses the services without submitting a task. `serve` uses
 the same startup; supervisors can use `serve --foreground --no-open --no-daemon`
 for a tracker whose daemon is managed separately. `gallivant down` stops both
 standalone services, preserving active agent processes.
+
+Open **System** for saved provider and coordinator observations, then use
+**Overview**, **Plans** and **Tasks** to inspect work. Protected graph records
+need an authenticated operator ingress. See [console access](app.md#the-browser-boundary)
+and the [feature matrix](ui-feature-matrix.md) for setup and qualification limits.
+
+To compile a local graph offline, run
+`gallivant plan validate synthetic.yaml --dir templates/dependency-plan` from
+the source checkout. The installed package also includes the example at
+`templates/dependency-plan` inside its package directory. `plan preview` adds
+read-only host binding. Use the protected operator ingress to review and queue a
+graph. Leave graph capacity at zero until that deployment's author, reviewer,
+host and isolation evidence is established. [Dependency plan setup](dependency-plans.md)
 
 On macOS the daemon starts `caffeinate` for its lifetime to prevent idle sleep.
 Closing a laptop lid, losing network or shutting down still interrupts monitoring.
@@ -406,3 +424,27 @@ including separate SSH and API credentials when using SSH Git. Setup checks
 transport access; a live public repository run has reached ready with explicit
 no-reviewer policy. Independent review and a clean Linux installation have not
 been qualified. Check `gallivant doctor` before starting your own repository.
+
+## Host supervision
+
+An operator can qualify a separate supervisor on Linux or macOS for a pinned,
+installed coordinator. The supervisor owns restart accounting and host
+configuration. Qualify the installed executable, version, absolute state
+directory, lease identity, crash behavior and restart throttle together.
+
+- On Linux, use a dedicated service-manager unit with an absolute
+  `ExecStart` pointing at the pinned installation and its foreground `up`
+  command. Qualify a dead-lease check and restart rate limits such as
+  `RestartSec` and `StartLimitBurst`. Verify that the unit's process and
+  cgroup policy preserves detached authors when the coordinator exits.
+- On macOS, use a dedicated launchd job with an absolute executable in
+  `ProgramArguments` and a fixed state directory. Qualify a dead-lease check
+  before restart and configure `ThrottleInterval`. Test intentional stops
+  and the survival of detached workers before enabling automatic restart.
+
+The adapter must prove the exact recorded lease owner is dead, honor intentional
+shutdown, and wait on occupied or unverifiable PIDs. It starts only the pinned
+installation and makes no task, provider, Git or update decisions. A live-hung
+restart needs its own qualified fencing. Native Linux and macOS service-manager
+qualification is M06 work. Disable automatic restart with the host manager before
+stopping the coordinator or changing its executable. [Recovery diagnostics](autonomous-recovery.md#long-running-execution-and-coordinator-availability)

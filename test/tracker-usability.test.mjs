@@ -5,10 +5,10 @@ import { overviewWindow, overviewSnapshot } from "../lib/tracker/overview.mjs";
 import { externalLink, externalLinkAttributes } from "../lib/tracker/links.mjs";
 import { completionView } from "../lib/task_completion.mjs";
 
-const entry = (state, at) => ({ repo: "acme/widget", base: "main", pr: 12, state, harness: "codex", iteration: 2, activity_at: at,
+const entry = (state, createdAt) => ({ repo: "acme/widget", base: "main", pr: 12, state, harness: "codex", iteration: 2, created_at: createdAt,
   cursor: { fixed_sha: "head" }, task: { completion: { version: 1, target: "delivery_ready" } } });
 const row = (id, saved) => ({ id, handle: id, state: saved.state, harness: saved.harness,
-  presentation: taskPresentation({ entry: saved, maxIterations: 60 }) });
+  presentation: taskPresentation({ id, entry: saved, maxIterations: 60 }) });
 const model = (...rows) => ({ needs_you: rows.filter(r => r.state === "needs-human"), running: rows.filter(r => !["needs-human", "done"].includes(r.state)), done: rows.filter(r => r.state === "done") });
 
 test("legacy completed tasks have a completed lifecycle without fabricating completion or review assurance", () => {
@@ -23,12 +23,18 @@ test("legacy completed tasks have a completed lifecycle without fabricating comp
 });
 
 test("recency spans lifecycle groups, ignores poll freshness, places missing dates last and breaks ties deterministically", () => {
-  const old = row("old-blocker", { ...entry("needs-human", "2026-09-10T10:00:00Z"), updated_at: "2026-11-11T14:00:00Z" });
-  const recent = row("recent-completion", entry("done", "2026-11-11T10:00:00Z"));
+  const poll = "2026-11-11T14:00:00Z";
+  const old = row("old-blocker", { ...entry("needs-human", "2026-09-10T10:00:00Z"), activity_at: poll, updated_at: poll });
+  const recent = row("recent-completion", { ...entry("done", "2026-09-01T10:00:00Z"),
+    completionEvidence: { terminal: { state: "MERGED", repository: "acme/widget", pr: 12, base: "main", head: "head",
+      observedAt: "2026-11-11T10:00:00Z" } } });
   const first = row("a-same-time", entry("pr-open", "2026-11-10T10:00:00Z"));
   const second = row("b-same-time", entry("pr-open", "2026-11-10T10:00:00Z"));
-  const unknown = row("missing-time", entry("pr-open", null));
+  const unknown = row("missing-time", { ...entry("pr-open", null), activity_at: poll });
   const input = model(second, unknown, old, recent, first), before = JSON.stringify(input);
+  assert.equal(recent.presentation.activity.source, "delivery");
+  assert.equal(old.presentation.activity.source, "created_at");
+  assert.equal(unknown.presentation.since, null);
   assert.deepEqual(overviewWindow(input).rows.map(r => r.id), [recent.id, first.id, second.id, old.id, unknown.id]);
   assert.equal(overviewWindow(input, { sort: "attention" }).rows[0].id, old.id);
   assert.equal(JSON.stringify(input), before);

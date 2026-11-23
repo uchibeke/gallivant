@@ -5,19 +5,28 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { existsSync, readFileSync, mkdirSync, writeFileSync, symlinkSync, lstatSync } from "node:fs";
-import { assertRuntimePin, checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "../lib/runtime_state.mjs";
+import { assertRuntimePin, checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState, PLAN_RUNTIME_FORMAT } from "../lib/runtime_state.mjs";
 import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
 import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { cancelControl } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic, readJson, canonicalPath } from "../lib/fs.mjs";
-import { CONFIG, tempHome, makeClock, silentLog, fakeGh, fakeGit, fakeNotify } from "./helpers.mjs";
+import { CONFIG, tempHome, makeClock, silentLog, fakeGh, fakeGit, fakeNotify, prFixture } from "./helpers.mjs";
 
 const manifest = { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) };
 const update = { ...manifest, coreSha256: "b".repeat(64) };
 const taskId = "task-" + "1".repeat(24);
 const remote = { transport: "remote", provider: "openai-agents", acceptance: "accepted", providerJobId: "owned", turnId: "root", providerState: "succeeded", collected: true };
+
+test("runtime ingress requires the pinned reservation format before the first registry write", () => {
+  const home = tempHome(), current = { ...manifest, ...PLAN_RUNTIME_FORMAT };
+  migrateRuntimeState({ home, manifest });
+  assert.throws(() => assertRuntimePin({ home, manifest: current }), { code: "COORDINATOR_PIN" });
+  migrateRuntimeState({ home, manifest: current });
+  assert.throws(() => assertRuntimePin({ home, manifest }), { code: "COORDINATOR_PIN" });
+  assert.doesNotThrow(() => assertRuntimePin({ home, manifest: current }));
+});
 
 test("archived v2 registry supports coordinator wake and integrity-checked backup and restore", async () => {
   const home = tempHome(), id = "acme/widget/history", state = makeState(home);
@@ -107,7 +116,7 @@ test("embedded coordinator resolves authenticated identity when plain context ha
   await coordinator.wake();
   assert.deepEqual(calls,["schedule","identity","schedule"],"the real tick succeeds without a test-only injected login");
   ctx.gh.user=async()=>{throw Object.assign(new Error("identity unavailable"),{code:"GH_UNAVAILABLE"});};
-  await assert.rejects(coordinator.wake(),{code:"GH_UNAVAILABLE"});
+  assert.deepEqual(await coordinator.wake(), [], "an unavailable identity does not abort independent coordinator lanes");
 });
 
 test("pre-registration intake and execution records retain their exact active artifact pin", async t => {
@@ -207,6 +216,7 @@ test("confirmed registry cancellations release the pin only after execution and 
   const ctx = { state, clock: makeClock(), log: silentLog, runnerFor: () => ({ current: () => job, cancel: async () => ({ confirmed }) }) };
   await cancelControl(ctx, id);
   assert.equal(state.get(id).reason, "cancellation-requested");
+  assert.equal(state.get(id).execution, undefined, "a versionless execution observation must stay out of the registry");
   assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
   state.update(id, { control: { action: "cancel", status: "queued" } }); confirmed = true;
   await cancelControl(ctx, id);
@@ -356,7 +366,7 @@ test("chain review cadence survives fast wakes, process restart and failed advan
     assert.equal(readJson(join(home, "coordinator.json")).chainCursor, null);
     assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, deadline);
   }
-  assert.equal(progress, 14, "one bounded entry still reconciles on every wake");
+  assert.equal(progress, 0, "settled chain predecessors do not use author slots");
   clock.advance(10 / 60);
   const broken = { ...ctx, state: { ...state, chains: () => { throw new Error("fixture state read failure"); } } };
   await assert.rejects(coordinator(broken).wake(), /fixture state read failure/);
@@ -371,6 +381,38 @@ test("chain review cadence survives fast wakes, process restart and failed advan
   clock.advance(10 / 60); await coordinator().wake();
   assert.deepEqual(reads, [1, 2, 3, 1, 2, 3, 1, 2, 3]); assert.equal(ancestry.length, 3);
   assert.ok(state.chains().every(([, c]) => c.status === "done"));
+});
+
+test("terminal predecessor evidence settles with scheduled chain sweeps disabled", async () => {
+  const home = tempHome(), state = makeState(home), clock = makeClock();
+  migrateRuntimeState({ home, manifest });
+  const anchor = { id: "acme/widget/predecessor", repo: "acme/widget", base: "main", branch: "work/predecessor",
+    pr: 1, url: "https://github.com/acme/widget/pull/1" };
+  const head = "a".repeat(40), merge = "b".repeat(40);
+  const retained = { status: "retained", pr: anchor.pr, head, reason: "local work" };
+  state.put(anchor.id, { ...anchor, harness: "claude", state: "done", worktree: "/fixture", workspace_cleanup: retained });
+  const chain = { name: "follow-on", repo: anchor.repo, base: anchor.base, after: anchor, status: "active", index: 0,
+    steps: [{ id: "acme/widget/successor" }] };
+  state.createChain(chain);
+  const pr = prFixture({ number: anchor.pr, url: anchor.url, baseRefName: anchor.base, headRefName: anchor.branch,
+    headRefOid: head, state: "MERGED", mergeCommit: { oid: merge }, mergedAt: new Date(clock.now()).toISOString() });
+  const ancestry = [];
+  const ctx = { home, state, clock, ownLogin: "me", config: CONFIG, log: silentLog, git: fakeGit(), notify: fakeNotify(),
+    gh: { ...fakeGh({ pr }), containsCommit: async (...args) => { ancestry.push(args); return true; } },
+    cleanupMergedWorkspace: async () => assert.fail("retained cleanup is already settled"),
+    runnerFor: () => assert.fail("settled execution must not relaunch"),
+  };
+  const store = createNodeOwnerStore({ home, durable: true });
+  const coordinator = createNodeCoordinator({ ctx, store, schedule: async () => {}, manifest, maxChains: 0 });
+  await coordinator.wake();
+  const saved = state.get(anchor.id);
+  assert.deepEqual(ancestry, [[anchor.repo, anchor.base, merge]]);
+  assert.equal(saved.completionEvidence.terminal.head, head);
+  assert.equal(saved.completionEvidence.terminal.mergeCommit, merge);
+  assert.equal(saved.completionEvidence.integration.qualified, false);
+  assert.deepEqual(saved.workspace_cleanup, retained);
+  assert.deepEqual(state.getChain(chain.name), chain);
+  assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, undefined);
 });
 
 test("idle upgrade backups require the old artifact and reject inconsistent rollback pins before output", async () => {

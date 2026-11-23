@@ -11,13 +11,12 @@ Removing a clone also removes its installed dependencies, build outputs and
 private per-task credential configuration. No separate cleanup command or
 provider-specific setting is needed.
 
-Local implementation harnesses receive task-scoped `TMPDIR`, `TMP` and `TEMP`
-through a short `/tmp/gvt-…` alias into `.cache/gallivant/tmp` in their clone.
-The short path keeps Unix socket names within platform limits; an occupied or
-changed alias is refused rather than overwritten. The existing private npm cache stays
-under `.cache/gallivant/npm`. Both are materialized at dispatch and ignored by Git.
-Tools that honor these environment variables therefore keep their scratch files
-inside the workspace that is removed on merge, together with its verified alias.
+Local implementation harnesses receive a private, short task-scoped directory
+through `TMPDIR`, `TMP` and `TEMP`. The path keeps Unix socket names within
+platform limits. The launch records its exact directory identity outside the
+checkout. The private npm cache lives under `.cache/gallivant/npm`. The
+coordinator checks both kinds of ownership before removing them, including
+any legacy temporary alias that is part of a merged workspace's cleanup.
 Explicit absolute paths such as
 `/private/tmp/custom-test-output` remain the task author's responsibility.
 
@@ -52,11 +51,11 @@ gallivant why owner/repository/task-id
 ```
 
 Tasks whose policy stops implementation at PR readiness remain eligible for a
-bounded, host-only merge observation for cleanup. Old completed entries are also
-checked, at most four per coordinator tick and no more than once per task's normal
-polling interval. These observations do not restart execution or change a recorded
-acceptance decision. Once cleanup is done or a checkout is explicitly retained,
-it is not repeatedly scanned.
+bounded, host-only merge observation for cleanup. Completed entries with remaining closeout use the bounded maintenance lane.
+A proved retain outcome settles chain cleanup while preserving source and
+evidence. A separately scheduled maintenance attempt can retry a changed
+proof without reopening a completed task. Optional archives have independent
+retention.
 
 Cleanup is scoped to Gallivant's own directories. It does not prune arbitrary
 `/tmp` files, global npm/pnpm caches, Docker images or user data. Keep adequate disk
@@ -66,3 +65,28 @@ can refer to the host disk shared by its sandbox, temporary files and session lo
 Run and review archives remain available for recovery and audit. Their long-term
 retention is separate from disposable workspace cleanup; do not delete private
 review history independently of its registry references.
+
+## Headroom and qualified maintenance
+
+New work checks the actual target mounts for available bytes and inodes before
+clone, preparation or launch. Memory and load can also defer heavy dispatch.
+The coordinator keeps existing authors and safe observation eligible. Package
+installs remain on demand.
+
+Run `gallivant recovery resources [handle]` for a redacted dry run. The report
+shows mount roles, available capacity, artifact class, reason code and next
+observation. Ownership requires an exact settled owner and artifact identity. Qualified maintenance can
+retire settled scratch, compact coordinator-created npm caches after their warm
+period and revisit explicitly retryable checkout proofs after six hours. The
+protected recipe limits roots, retention, mutation count and bytes. Dirty
+source, active or uncollected work, approved inputs, UI logs, backup files and
+unresolved Git recovery journals remain protected. A replaced directory or
+shared mount is retained.
+
+When an approved reserve is available, the coordinator can release its exact
+inode to make space for the journal. The deletion intent includes the canonical
+root and directory identity. It is synced before removal. Recovery can re-sync
+an existing intent without allocating a new state file and reconcile the same
+directory after interruption. If recording remains unavailable, cleanup pauses.
+Leave the reserve receipt and pending intents in place when investigating space
+pressure. [Configuration and disable controls](config.md#recovery-scheduling-and-headroom)

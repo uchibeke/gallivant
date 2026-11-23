@@ -120,6 +120,7 @@ import fs from 'node:fs';
 import { existsSync, writeFileSync } from 'node:fs';
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
+import { interceptFileWrites } from ${JSON.stringify(new URL("./atomic-write-fixture.mjs", import.meta.url).href)};
 os.homedir = () => ${JSON.stringify(root)};
 if (${JSON.stringify(startupFault)} !== null) {
   const fault = ${JSON.stringify(startupFault)};
@@ -155,16 +156,16 @@ if (${JSON.stringify(startupFault)} !== null) {
 }
 if (${JSON.stringify(writeFault)} !== null) {
   const write = fs.writeFileSync;
-  fs.writeFileSync = (path, ...args) => {
+  interceptFileWrites(fs, (path, data, forward) => {
     const target = String(path);
     if (existsSync(${JSON.stringify(join(root, "ready.json"))}) &&
-        (target.startsWith(${JSON.stringify(join(root, "report.json"))}) ||
-         (${JSON.stringify(writeFault)} === 'job' && target.endsWith('/job.json')))) {
+        (${JSON.stringify(writeFault)} === 'ledger' && target.startsWith(${JSON.stringify(join(root, "report.json"))} + '.') ||
+         ${JSON.stringify(writeFault)} === 'job' && target.endsWith('/job.json'))) {
       write(${JSON.stringify(join(root, "write-fault.json"))}, JSON.stringify({ at: Date.now(), target }));
       throw Object.assign(new Error('injected evidence volume full'), { code: 'ENOSPC' });
     }
-    return write(path, ...args);
-  };
+    return forward(data);
+  });
 }
 if (${crashAfterSpawn} || ${JSON.stringify(changeDefaultTo)} !== null) {
   const spawn = cp.spawn;
@@ -203,7 +204,7 @@ await import(${JSON.stringify(new URL("./live-harnesses.mjs", import.meta.url).h
   child.stdout.resume();
   const done = new Promise((resolve, reject) => {
     child.on("error", reject);
-    child.on("exit", (code, signal) => resolve({ code, signal, stderr, at: Date.now() }));
+    child.on("close", (code, signal) => resolve({ code, signal, stderr, at: Date.now() }));
   });
   return { child, done };
 }
@@ -708,7 +709,10 @@ test("live signal and watchdog stops await fallback even when evidence writes fa
         assert.equal(entry.turns[0].status, "running");
         assert.throws(() => assertUnspentVersionBlock(entry, JSON.parse(saved)), /only an unspent version-blocked case/);
         if (writeFault === "ledger") {
-          assert.ok(read(join(root, "write-fault.json")).at - stoppedAt >= 4_800, "interruption checkpoint must follow fallback");
+          const fault = read(join(root, "write-fault.json"));
+          assert.ok(fault.target.startsWith(join(root, "report.json") + ".") && fault.target.endsWith(".tmp"));
+          assert.equal(existsSync(fault.target), false, "failed atomic updates remove only their own temporary file");
+          assert.ok(fault.at - stoppedAt >= 4_800, "interruption checkpoint must follow fallback");
           assert.ok(read(join(root, "exported.json")).at - stoppedAt >= 4_800, "metadata must follow fallback");
         } else assert.equal(existsSync(join(root, "exported.json")), false, "surface runner write errors before metadata");
       } finally { cleanup(root, run?.child); }

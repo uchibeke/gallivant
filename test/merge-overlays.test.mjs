@@ -9,12 +9,13 @@ import { overlayBackupPath } from "../lib/merge_overlays.mjs";
 import { tempHome } from "./helpers.mjs";
 
 const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
-function world(t, { conflict = false, baseDelete = false, execute = execFileAsync } = {}) {
+function world(t, { conflict = false, baseDelete = false, checkoutCrlf = false, execute = execFileAsync } = {}) {
   const home = tempHome(); t.after(() => rmSync(home, { recursive: true, force: true }));
   const origin = join(home, "origin"), tree = join(home, "tree"), prd = "docs/prds/task.md";
   const g = (args, cwd = tree) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "test@example.test", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "test@example.test" } }).trim();
   mkdirSync(origin); g(["init", "-qb", "main"], origin);
+  if (checkoutCrlf) put(join(origin, ".gitattributes"), `${prd} text eol=crlf\n`);
   put(join(origin, prd), "Tracked original brief\n"); put(join(origin, "app.txt"), "original\n");
   g(["add", "."], origin); g(["commit", "-qm", "Initial code"], origin);
   g(["clone", "-q", origin, tree], home); g(["checkout", "-qb", "work/task"]);
@@ -45,6 +46,17 @@ test("base merge preserves exact approved tracked overlay bytes without publishi
   assert.equal(existsSync(w.backup), false);
   const again = await w.git.mergeBase(w.tree, "main", { overlays: w.overlays });
   assert.equal(again.merged, false); assert.equal(existsSync(w.backup), false);
+  await w.git.assertClean(w.tree, w.overlays);
+});
+
+test("base merge applies checkout line endings before restoring the approved overlay", async t => {
+  const w = world(t, { checkoutCrlf: true });
+  const result = await w.git.mergeBase(w.tree, "main", { overlays: w.overlays });
+  assert.equal(result.merged, true);
+  assert.equal(readFileSync(join(w.tree, w.prd), "utf8"), w.approved);
+  assert.equal(await w.git.fileAt(w.tree, "HEAD", w.prd), "New tracked base brief\n");
+  assert.equal(w.g(["diff", "--cached", "--name-only"]), "");
+  assert.equal(existsSync(w.backup), false);
   await w.git.assertClean(w.tree, w.overlays);
 });
 
@@ -101,6 +113,7 @@ test("unknown bytes after merge are preserved with a private backup and block an
   assert.equal(readFileSync(join(w.tree, w.prd), "utf8"), "Concurrent unknown bytes\n");
   assert.equal(readFileSync(join(w.backup, "0.bin"), "utf8"), w.approved);
   await assert.rejects(w.git.mergeBase(w.tree, "main", { overlays: w.overlays }), /interrupted approved-input merge/);
+  await assert.rejects(w.git.repairManifest(w.tree), /interrupted approved-input merge/);
 });
 
 test("failed conflict abort preserves its unresolved index and the approved-byte recovery backup", async t => {

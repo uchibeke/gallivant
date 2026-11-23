@@ -25,18 +25,19 @@ test("a completion gate wait names its cause instead of waiting on an already-cl
   assert.doesNotMatch(row.detail, /on reviewer/);
 });
 
-test("activity time ignores routine registry updates and tracks the active reviewer", () => {
+test("activity time ignores review requests, reviewer launches and routine registry updates", () => {
   const id="acme/widget/widget-export", w=world({entries:{[id]:entryAt({updated_at:at(9),last:{at:at(1),event:"review requested"}})}});
-  assert.equal(model(w.ctx).running[0].since,at(1));
+  assert.equal(model(w.ctx).running[0].since,T0);
   w.state.update(id,{updated_at:at(10),firstPartyReview:{status:"running",startedAt:Date.parse(at(3)),pieces:[]}});
-  assert.equal(model(w.ctx).running[0].since,at(3));
+  assert.equal(model(w.ctx).running[0].since,T0);
   w.state.update(id,{updated_at:at(11)});
-  assert.equal(model(w.ctx).running[0].since,at(3),"poll writes do not reset the activity clock");
+  assert.equal(model(w.ctx).running[0].since,T0,"poll writes do not reset the activity clock");
 });
 
 test("status includes recorded readiness and terminal activity instead of polling timestamps", () => {
   for (const state of [STATES.ready, STATES.done]) {
-    const id = "acme/widget/widget-export", w = world({ entries: { [id]: entryAt({ state, last: { at: at(1) }, activity_at: at(5), updated_at: at(9) }) } });
+    const id = "acme/widget/widget-export", w = world({ entries: { [id]: entryAt({ state, last: { at: at(1) }, activity_at: at(5), updated_at: at(9), cursor: { fixed_sha: "head" },
+      completionEvidence: { delivery: { repository: "acme/widget", base: "main", pr: 142, head: "head", gate: { allow: true }, observedAt: at(5) } }, base: "main" }) } });
     const row = [...model(w.ctx).needs_you, ...model(w.ctx).done][0];
     assert.equal(row.since, at(5));
     w.state.update(id, { updated_at: at(10) });

@@ -68,11 +68,15 @@ for (const type of [chromium, firefox, webkit]) {
     await page.getByRole("link", { name: "migration-rollout", exact: true }).click();
     assert.match(await page.locator(".milestone-detail").textContent(), /Wait for milestone 2 to merge/);
     await page.goBack(); assert.equal(await page.locator('[aria-current="step"]').textContent(), "search-index");
-    for (const [name, heading] of [["Run history", "Run history"], ["System health", "System health"], ["Overview", "Overview"]]) {
+    for (const [name, heading] of [["Tasks", "Tasks"], ["System", "System health"], ["Overview", "Overview"]]) {
       await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name, exact: true }).click();
       assert.equal(await page.locator("h1").textContent(), heading);
       assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
       assert.ok(new URL(page.url()).pathname.startsWith(base || "/"));
+      if (name === "Tasks") {
+        await page.getByRole("link", { name: "Run history", exact: true }).click();
+        assert.equal(await page.locator("h1").textContent(), "Run history");
+      }
     }
     assert.equal(chain.hostReads(), reads, "navigation never queries the host");
 

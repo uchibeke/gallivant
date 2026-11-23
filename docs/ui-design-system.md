@@ -1,8 +1,8 @@
 # Interface foundation
 
-The shared server-rendered shell connects Overview, Tasks, Chains, System health,
-Run history and New task. Tasks focuses the existing overview search; all views
-retain the same task facts and root/mounted URL contract.
+The shared server-rendered shell connects Overview, Plans, Tasks and System.
+Tasks includes links to run history and local intake. All views retain the same
+task facts and root/mounted URL contract.
 
 ## Composition
 

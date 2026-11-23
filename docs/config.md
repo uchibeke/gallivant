@@ -29,12 +29,13 @@ See [installation](install.md) for the first-run sequence.
 | `reviewer` | Codex | `{ login, rereview_comment, blocking_pattern }` or `null`. See below. |
 | `deliverable` | policy defaults | Limits for the completion gate, in the shape of APort's `deliverable.task.complete` passport limits: `evaluator` (`aport` confirms with APort's hosted evaluator using a per-task passport, `local` uses only the built-in rules), `api_url`, `on_unreachable` (`wait`, the default: no decision until APort answers, the daemon retries next tick and stops as `needs-human` after five consecutive failures; `local`: the built-in verdict stands and the log says so), `require_summary`, `min_summary_words`, `require_tests_passing`, `scan_output`, `blocked_patterns`. `null` turns the gate off. See [prd.md](prd.md). |
 | `notify` | null | `{ ntfy: "https://ntfy.sh/<topic>", email: null }`. Null means transitions are logged only. |
+| `collaboration` | null | Optional, one-way Vercel Board delivery for significant task transitions. Null loads no Board package and makes no Board request. See [Board collaboration](collaboration.md). |
 | `worktrees` | required | Directory for per-PRD checkouts. Must be outside the Gallivant home. |
 | `github_token_file` | null | Null means the credential is resolved from the environment or from `gh`, so whichever way you are logged in already works. Set it to the path of a fine-grained PAT to narrow what a run can reach; it then wins over both of the others. See [GitHub credentials](#github-credentials). |
 | `context_paths` | [] | Directories a run may READ in addition to its own checkout: a sibling repository, a folder of design notes. Absolute or `~`-prefixed, and each must exist. Writes do not widen. Your home directory, the Gallivant home, `~/.claude`, `~/.codex`, `~/.config/opencode` and `~/.aport` are refused, as is any parent of them. Claude Code renders each as `--add-dir <dir>`; Codex and Gemini CLI refuse the run rather than escalate; opencode and goose have no such flag and ignore it. Read [guardrails.md](guardrails.md#extra-read-directories-are-a-widening-not-a-feature) before setting it: whatever a run reads can leave in a commit or a PR body. |
 | `harness` | local discovery | Omit it to discover local CLI harnesses on PATH. Explicit entries select the available providers and disable discovery; hosted entries always require explicit configuration. `task` and `new` default to the first configured entry. Select `--harness` or the PRD's `harness:` explicitly when several are configured. |
 | `harness.claude` | | `{ bin, settings }`. `bin` is the absolute path to `claude`; `settings` is the Gallivant settings file with the APort hook and sandbox. |
-| `harness.codex` | | `{ bin }`. |
+| `harness.codex` | | `{ bin, model? }`. Optional `model` explicitly selects an account-supported CLI model for implementation, resume and restricted preparation. Omit it to inherit Codex's default. No automatic model/account fallback is performed; select a model available to the configured CLI account. This does not change global Codex settings or security permissions. Changing the reviewer route requires its normal requalification. |
 | `harness.gemini` | | `{ bin }`. |
 | `harness.opencode` | | `{ bin }`. |
 | `harness.goose` | | `{ bin }`. |
@@ -56,6 +57,14 @@ launch, and keep external setup separate from implementation acceptance. Shared 
 of related code paths before pushing and return control to the daemon for subsequent review batches. These instructions
 help reduce repeated narrow fixes; the existing tests, reviewer and completion gate still decide readiness. A run is
 ready for human review only when its actual criteria pass; more allowance does not authorize fabricating evidence.
+
+## Board collaboration
+
+The optional Board adapter is configured in the same mode-600 private file. It
+publishes a versioned, sanitized summary for selected state transitions while
+the local registry, saved brief, host evidence and completion gate remain
+canonical. Replies are ignored by default. Read [the setup, policy, recovery and
+rollback guide](collaboration.md) before enabling it.
 
 ## Execution providers
 
@@ -123,6 +132,9 @@ package list. Authentication, access and network failures stop before a paid
 coding turn; repair access, then Resume agent. Fresh initial starts fail before
 creating their checkout or start claim. Review-fix failures retain feedback and
 iteration allowance with reason `dependency-auth`.
+
+An expired recovery service budget defers the registry check to a later
+scheduled poll. The original dispatch or retry allowance still applies.
 
 Only the selected local CLI coding session receives the package credential as
 `NODE_AUTH_TOKEN` and `GITHUB_PACKAGES_TOKEN`. Other repositories do not receive
@@ -277,21 +289,26 @@ task-head/base-SHA pair is never dispatched twice automatically. Missing permiss
 base identity or checkout ownership stop recovery. No credentials, context paths, guardrails, review policy, merge
 authority or deployment authority are widened. Changed inputs retain the normal explicit approval requirements.
 
+A base repair with pinned brief and source digests uses the exact approved
+copies. Editing a supporting file in the operator checkout alone does not
+stop Git repair. The saved snapshots and the task checkout must still match
+their approvals. Adopt new instructions through explicit resnapshot before
+completion can be certified.
+
 Restart recovery reconciles only the recorded operation and session. It never aborts or resets an unfinished repair.
 Dirty files, unknown ownership, unresolved merges and failed pushes stop with the worktree intact. Unchanged approved
-brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. A tracked
-private input that exactly matches its approved snapshot may temporarily use its clean committed bytes for a normal
-base merge. Its original bytes and permissions are backed up privately under the checkout's Git directory, then
-restored after the merge or a successful conflict abort. The approved copy is never staged or included in that merge
-commit. Unrelated edits, staged files, links and changed ownership still block this path.
+brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. During
+an ordinary base refresh, a tracked private input that matches its approved snapshot may temporarily use the clean
+Git checkout representation of the committed file. The coordinator backs up the original bytes and permissions
+under the checkout's Git directory and restores them after the merge or a successful conflict abort. The merge
+commit contains the tracked Git version. Unrelated edits, staged files, links and changed ownership block this path.
 
 If that temporary input handling reveals real code conflicts, recovery restores the inputs and stops with
 `base-repair-overlay` before charging or launching a repair worker. A raw worker merge would otherwise fail on the
 same approved input. An operator must own that merge, keep the approved working copies out of its commit, resolve
-and verify the intended changes, then resume the same task. This case is not yet an autonomous repair path. If an
-abort or restoration fails, the checkout and private `gallivant-merge-overlays` backup remain intact; another merge
-is refused until the owner reconciles the index and restores those exact approved bytes. Do not delete that backup
-to force continuation or commit its private contents.
+and verify the intended changes, then resume the same task. If an abort or restoration fails, preserve the checkout
+and private `gallivant-merge-overlays` backup. Before the next merge or qualified repair, the owner must reconcile
+the index and restore those exact approved bytes.
 
 After a push, Git must prove that the observed remote head contains both the repair commit and pinned base. Old readiness and
 head-bound review evidence are invalidated; new-head CI, required reviewer clearance and the completion gate still
@@ -300,6 +317,52 @@ decide readiness. See [repair troubleshooting](commands.md#base-repair-troublesh
 Every merge is recorded the moment it happens, not when the round finally starts, because several things after it can
 decline the round. The log says what was merged into what and when, and `gallivant why` prints the same thing with the
 commit, so an operator reading a diff they did not expect can see where the extra commit came from.
+
+## Dependency plan admission
+
+Plan previews inherit the configured repository, harness, review, completion
+and resource policies. They report current recovery hold generations and any
+unverified execution capability.
+
+`dispatch_capacity` is an optional object in the coordinator config. Counts
+are integers up to 64. Set both graph ceilings above zero to approve graph
+dispatch in a protected deployment.
+
+| Key | Default | Scope |
+| --- | ---: | --- |
+| `authors` | 8 | Live author reservations across manual, linear and graph work |
+| `per_repository` | 8 | Live authors in one host repository |
+| `per_plan` | 8 | Live authors in one plan or linear chain |
+| `preparations` | 4 | Concurrent initial preparations, including clone work |
+| `graph_authors` | 0 | Live authors admitted by graph dispatch |
+| `graph_per_repository` | 0 | Live graph authors in one host repository |
+
+Only graph ceilings accept zero. Lower limits apply to new reservations.
+The approval pins the upper limits for a graph, and current configuration can
+further narrow admission. Active runs retain their original task allowances.
+The reviewer and reconciliation work lanes use their existing independent
+limits and budgets. `execution.concurrency` governs bounded coordinator I/O.
+
+Protected plan operations require an authenticated operator with scoped grants.
+For an embedded deployment, the trusted coordinator ingress supplies its
+current principal, grants and exact worker-isolation proof using
+`bindPlanOperator`. The proof must cover the registry, snapshots, operator
+ingress and coordinator control routes for the actual deployment. Configure
+isolation outside the worker with an OS account, container or qualified outer
+sandbox. A standalone probe and file modes for a shared user are insufficient.
+Current standalone author routes leave this gate closed.
+
+Start with zero graph ceilings for read-only observation. Admit the exact
+disposable qualification separately from operational plans. Select an existing
+protected task and pin its manifest digest, route allowances and evidence root
+before requesting native or live checks. The signed evidence describes that
+exact environment. Positive ceilings and each plan's protected approval govern
+operational reservations. [Dependency delivery qualification](dependency-plan-qualification.md)
+
+New plan admissions and reviewed controls use registry version 6 and dependency
+plan format 2. Existing version 4 and 5 registries remain readable. A pinned
+namespace requires the matching artifact manifest before accepting the new
+format. [Plan controls and rollback](dependency-plans.md#references-and-rollback)
 
 ## What is deliberately not a key
 
@@ -536,3 +599,35 @@ and the completion receipt.
 ## Versioned review policy
 
 `review.mode` selects `external-required`, `first-party-required`, or `both-required` for new tasks. `review.route: "codex"` requires a successful isolated live qualification. `review.specialist` allows at most one of `security` or `regression`. Defaults and bounds, per-repository settings, separate review allowances, explicit zero-check CI policy and the `legacy_no_review` exception are documented in [First-party review](first-party-review.md). A config edit cannot change an existing task policy; use `review policy <handle> --mode <mode> --reason "..."` to revoke readiness and explicitly re-evaluate. `reviewer: null` alone no longer authorizes an unattended new start.
+
+Recovery profiles are revisioned coordinator registry records. A new start selects a profile by exact digest. A global default cannot enroll an existing task. See the [profile fields, route tuple and generation rules](autonomous-recovery.md#recovery-policy-and-admission).
+
+Canary admissions pin an exact profile, task bindings, owner/recipe
+combinations and evidence expiry. Profile revision or a scoped disable fences
+queued recovery. Keep the disposable qualification profile separate from
+profiles used for canaries. Model, credential and capture capabilities require
+proof from the selected launch. [Qualification and rollout](recovery-qualification.md)
+
+## Recovery scheduling and headroom
+
+`recovery_scan_seconds` defaults to 60 and accepts integers from 10 to 600.
+It controls structural eligibility checks inside the existing loop. Review
+polling and execution progress continue to use their existing cadences.
+
+`resource_headroom` is optional. It accepts the following keys.
+
+| Key | Default | Meaning |
+| --- | ---: | --- |
+| `minimum_free_bytes` | 67,108,864 | Free bytes required per state, checkout, Git metadata and temporary mount |
+| `minimum_free_inodes` | 128 | Free inodes on each target mount |
+| `minimum_memory_bytes` | 33,554,432 | Minimum OS and process-available memory |
+| `maximum_load_per_cpu` | 4 | Maximum one-minute load per available CPU. Zero disables the load check |
+| `warm_cache_hours` | 12 | Warm period for the coordinator-created task-local npm cache |
+| `cleanup` | `observe` | `qualified` enables new cleanup only with a matching protected recipe, scope and qualification |
+| `journal_reserve` | `null` | A filesystem qualification pin with numeric `device` and `fs_type` when separately approved |
+
+The reserve is a preallocated 4 MiB file on the coordinator journal volume.
+Keep it disabled until the exact platform and volume are qualified. Restore
+`cleanup: "observe"` and `journal_reserve: null` to disable new resource
+mutations. Preserve receipts, pending intents and execution state when changing
+these settings. [Workspace retention and inspection](workspace-cleanup.md)

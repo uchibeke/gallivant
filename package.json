@@ -3,6 +3,9 @@
   "version": "0.3.0",
   "description": "Turn repository tasks into reviewed pull requests with local or hosted agents, acceptance checks and a persistent review loop.",
   "type": "module",
+  "browser": {
+    "./lib/recovery_digest.mjs": "./lib/recovery_digest_browser.mjs"
+  },
   "bin": {
     "gallivant": "bin/gallivant.mjs",
     "task-review": "bin/task-review.mjs",
@@ -22,6 +25,11 @@
     "./task-delivery/views": "./lib/task_delivery_view.mjs",
     "./task-delivery/store": "./lib/task_delivery_store.mjs",
     "./task-delivery/mcp": "./lib/task_delivery_mcp.mjs",
+    "./dependency-plans": "./lib/dependency_plan.mjs",
+    "./collaboration": "./lib/collaboration.mjs",
+    "./collaboration/board": "./lib/board_collaboration.mjs",
+    "./collaboration/contracts": "./lib/collaboration_contract.mjs",
+    "./collaboration/store": "./lib/collaboration_store.mjs",
     "./runtime/coordinator": "./lib/coordinator.mjs",
     "./runtime/node": "./lib/runtime_node.mjs",
     "./runtime/state": "./lib/runtime_state.mjs",
@@ -92,16 +100,22 @@
     "url": "https://github.com/uchibeke/gallivant.git"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "ajv": "8.20.0",
     "jpeg-js": "0.4.4",
     "pngjs": "7.0.0",
-    "smol-toml": "1.9.0"
+    "smol-toml": "1.9.0",
+    "yaml": "2.9.1"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1"
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@vercel/board": "0.50.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "@vercel/board": {
       "optional": true
     }
   },

@@ -1,19 +1,22 @@
 import { test } from "node:test";
+import { contentDigest, sourceManifestDigest } from "../lib/start_contract.mjs";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { makeGit } from "../lib/git.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { makeState, newEntry, entryId } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { checkAuthorStorage } from "../lib/recovery_preflight.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { requestControl, applyControl, MAX_NOTE } from "../lib/control.mjs";
 import { quote } from "../lib/prompt.mjs";
 import { makeHostRegistry } from "../lib/hosts.mjs";
 import { execFileAsync } from "../lib/process.mjs";
-import { CONFIG, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity, silentLog, prFixture, claudeResultLines, review, STATES, harnessBin } from "./helpers.mjs";
+import { CONFIG, FIXTURE_HEADROOM, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity, silentLog, prFixture, claudeResultLines, review, STATES, harnessBin } from "./helpers.mjs";
 
 const write = (file, text) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, text); };
 const combined = "export function calculate(n) { return Math.max(0, n) + 1; }\n";
@@ -21,7 +24,7 @@ const baseCode = "export function calculate(n) { return Math.max(0, n); }\n";
 
 // Native repositories and the real execution ledger; the worker is deliberately
 // controlled by the fixture, with no paid provider calls or host writes.
-function world(t, { hostConflict = true, superseded = false, baseUpdate = "conflict", state: stateName = STATES.prOpen, host = "github.com", trackedBrief = false } = {}) {
+function world(t, { hostConflict = true, superseded = false, baseUpdate = "conflict", privateBaseUpdate = false, state: stateName = STATES.prOpen, host = "github.com", trackedBrief = false } = {}) {
   const home = tempHome(); t.after(() => rmSync(home, { recursive: true, force: true }));
   const origin = join(home, "origin"), tree = join(home, "trees", "task"), operator = join(home, "operator");
   const calls = [];
@@ -34,6 +37,7 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
   g(["init", "-q", "-b", "main"], origin);
   if (trackedBrief) write(join(origin, "docs/prds/widget-export.md"), `${GOOD_PRD}\nOriginal tracked metadata.\n`);
   write(join(origin, "shared.mjs"), "export function calculate(n) { return n; }\n");
+  if (privateBaseUpdate) write(join(origin, "AGENTS.md"), "Keep approved security requirements.\n");
   g(["add", "."], origin); g(["commit", "-qm", "Initial behavior"], origin);
   g(["clone", "-q", origin, tree], home); g(["checkout", "-qb", "work/repair"]);
   write(join(tree, "shared.mjs"), "export function calculate(n) { return n + 1; }\n");
@@ -43,6 +47,10 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
     write(join(origin, file), superseded ? "export function calculate(n) { return Math.max(0, n + 1); }\n" : baseCode);
     if (trackedBrief) write(join(origin, "docs/prds/widget-export.md"), `${GOOD_PRD}\nUpdated base metadata.\n`);
     g(["add", "."], origin); g(["commit", "-qm", "Preserve safe base behavior"], origin);
+    if (privateBaseUpdate) {
+      write(join(origin, "AGENTS.md"), "Keep approved security requirements.\nNew main documentation.\n");
+      g(["add", "AGENTS.md"], origin); g(["commit", "-qm", "Update base documentation"], origin);
+    }
   }
   const head = g(["rev-parse", "HEAD"]), base = g(["rev-parse", "HEAD"], origin);
   const prd = "docs/prds/widget-export.md", source = "AGENTS.md";
@@ -62,14 +70,16 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
   const gh = fakeGh({ pr: prFixture({ url, headRefName: "work/repair", headRefOid: head, mergeable: hostConflict ? "CONFLICTING" : "MERGEABLE" }),
     reviews: hostConflict ? [] : [review({ id: 1, by: "me", state: "CHANGES_REQUESTED", at: at(5) })] });
   gh.now = () => new Date(clock.now()).toISOString();
-  const git = makeGit({ config: { home, worktrees: dirname(tree) }, identity: fakeIdentity() });
+  const config = { ...CONFIG, home, worktrees: dirname(tree), resource_headroom: FIXTURE_HEADROOM,
+    ...(host === "bitbucket.org" ? { repos: [{ repo, reviewer: null, trusted_authors: ["{11111111-1111-4111-8111-111111111111}"] }] } : {}) };
+  const git = makeGit({ config, identity: fakeIdentity() });
   // Host binding is faked only at the transport edge; fetch/merge/ancestry/index
   // proofs operate on real Git objects through makeGit.
   git.originOf = async () => `https://${host}/acme/widget.git`;
   git.ensureHttpsRemote = async () => {};
   const runner = makeExecution({ root: join(home, "runs"), taskId: id, provider: "claude", runner: raw, legacySessionId: state.get(id).session, clock });
   const registry = makeHostRegistry({ credential: fakeCredential() });
-  const ctx = { config: { ...CONFIG, home, worktrees: dirname(tree), ...(host === "bitbucket.org" ? { repos: [{ repo, reviewer: null, trusted_authors: ["{11111111-1111-4111-8111-111111111111}"] }] } : {}) }, state, clock, ownLogin: "me", gh, host: gh, hosts: registry, git,
+  const ctx = { config, state, clock, ownLogin: "me", gh, host: gh, hosts: registry, git,
     log: silentLog, notify: fakeNotify(), credential: fakeCredential(), identity: fakeIdentity(), runnerFor: () => runner,
     readPrd: () => GOOD_PRD, readSource: () => "Keep approved security requirements.\n" };
   const tick = async () => {
@@ -120,6 +130,27 @@ test("a code conflict with an approved tracked input stops unpaid instead of dis
   assert.equal(readFileSync(join(w.tree, w.prd), "utf8"), GOOD_PRD);
   assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
   assert.deepEqual(await w.git.mergeState(w.tree), { head: null, unmerged: 0, other: [] });
+});
+
+async function managedPreviousRun(w) {
+  const job = await w.runner.continue({ operationId: "managed-initial", name: "managed-initial", sessionId: w.entry().session,
+    inputHead: w.head, spec: { cmd: "fixture", args: [], options: {} } });
+  w.raw.finish(claudeResultLines(), { exit: 0 });
+  await w.runner.reconcile({ force: true }); await w.runner.collect();
+  w.runner.settle(job.id, () => 0);
+  w.state.update(w.id, { last: { at: T0, run: job.id, exit: 0 } });
+  assert.equal(w.runner.current().execution.collected, true);
+}
+
+test("repair fixtures tolerate host pressure while checking native Git mounts", async t => {
+  const w = world(t);
+  const paths = { stateDir: w.home, worktree: w.tree, gitDirs: [join(w.tree, ".git")] };
+  const adapters = { pressure: () => ({ memoryBytes: 0, loadPerCpu: 8 }) };
+  assert.throws(() => checkAuthorStorage(paths, adapters), /memory, process-pressure/);
+  assert.deepEqual(checkAuthorStorage(paths, adapters, w.ctx.config).blocked, []);
+  const { mounts } = await w.git.authorStorage(w.tree, w.home);
+  assert.deepEqual(Object.keys(mounts), ["state", "checkout", "scratch", "git-1", "git-2", "git-3"]);
+  assert.throws(() => checkAuthorStorage({ ...paths, gitDirs: [join(w.tree, "missing")] }, adapters, w.ctx.config), /git-1-unverified/);
 });
 
 test("owned UI resume and message repair conflicts from watching and explicitly stopped tasks", async t => {
@@ -243,11 +274,196 @@ test("merge or superseding cancellation during pushed repair proof blocks the fo
       return result;
     };
     await applyControl(w.ctx, w.id);
-    assert.equal(w.entry().base_repair.status, "verified", "the existing remote push proof remains recorded");
+    assert.equal(w.entry().verified_progress.kind, "verified-push", "the existing remote push proof remains recorded");
+    assert.equal(w.entry().base_repair.status, change === "cancel" ? "blocked" : "verified", "a superseded request cannot accept a failed paid result");
     assert.equal(w.raw.started.length, 2, "terminal integration or a new owner cannot launch a follow-up");
     if (change === "cancel") { assert.equal(w.entry().control.id, "new-cancel"); assert.equal(w.entry().control.status, "queued"); }
     else assert.equal(w.entry().control.status, "failed");
   });
+});
+
+test("a superseded resume cannot restore an overlay after a failed repair", async t => {
+  const w = continuationWorld(t, { privateBaseUpdate: true });
+  await w.tick(); await w.resolveMerge();
+  const committed = readFileSync(join(w.tree, w.source), "utf8");
+  assert.match(committed, /New main documentation/);
+  w.raw.finish(claudeResultLines(), { exit: 1 }); await w.tick();
+  assert.equal(w.entry().base_repair.status, "blocked");
+
+  requestControl(w.ctx, { handle: w.id, action: "resume", requestId: "resume-private-overlay" });
+  const fetch = w.git.fetchBranchHead;
+  w.git.fetchBranchHead = async (...args) => {
+    const result = await fetch(...args);
+    w.state.update(w.id, { control: { id: "new-cancel", action: "cancel", status: "queued", at: T0 } });
+    return result;
+  };
+  await applyControl(w.ctx, w.id);
+
+  assert.equal(w.entry().control.id, "new-cancel");
+  assert.equal(w.entry().base_repair.status, "blocked");
+  assert.equal(w.raw.started.length, 2);
+  assert.equal(readFileSync(join(w.tree, w.source), "utf8"), committed);
+});
+
+test("pushed repair restores private context from exact approved snapshots while retaining main's committed document", async t => {
+  for (const crlf of [false, true]) await t.test(crlf ? "Git checkout conversion" : "normal checkout", async t => {
+    const w = world(t, { privateBaseUpdate: true });
+    await w.tick(); const repaired = await w.resolveMerge();
+    const committed = w.g(["show", "HEAD:AGENTS.md"]);
+    assert.match(committed, /New main documentation/);
+    if (crlf) { w.g(["config", "core.autocrlf", "true"]); write(join(w.tree, w.source), `${committed}\n`.replaceAll("\n", "\r\n")); }
+    w.raw.finish(claudeResultLines(), { exit: 0 });
+    await w.tick();
+    assert.equal(w.entry().base_repair.status, "verified", JSON.stringify(w.entry()));
+    assert.equal(w.entry().reason, null); assert.equal(w.raw.started.length, 2);
+    assert.equal(w.g(["rev-parse", "HEAD"]), repaired);
+    assert.equal(w.g(["show", "HEAD:AGENTS.md"]), committed);
+    assert.equal(readFileSync(join(w.tree, w.source), "utf8"), w.ctx.readSource(w.id, w.source));
+    assert.equal(w.ctx.readSource(w.id, w.source), "Keep approved security requirements.\n");
+    await w.git.assertClean(w.tree, (await import("../lib/base_repair.mjs")).repairOverlays(w.ctx, w.id, w.entry()));
+  });
+});
+
+test("pushed repair never overwrites local edits, links, foreign ownership or task-only authority commits", async t => {
+  for (const fault of ["edited", "staged", "hidden", "unrelated", "unrelated staged", "linked", "foreign session", "task authority commit", "remote mismatch"]) await t.test(fault, async t => {
+    const w = world(t, { privateBaseUpdate: true }); await w.tick(); await w.resolveMerge();
+    if (["edited", "staged", "hidden"].includes(fault)) {
+      write(join(w.tree, w.source), "Unfinished private edits.\n");
+      if (fault === "staged") w.g(["add", w.source]);
+      if (fault === "hidden") w.g(["update-index", "--skip-worktree", w.source]);
+    }
+    if (fault.startsWith("unrelated")) { write(join(w.tree, "unfinished.mjs"), "Unfinished unrelated work.\n"); if (fault.endsWith("staged")) w.g(["add", "unfinished.mjs"]); }
+    if (fault === "linked") { rmSync(join(w.tree, w.source)); symlinkSync(join(w.operator, w.source), join(w.tree, w.source)); }
+    if (fault === "foreign session") w.state.update(w.id, { session: "7f1c2d3e-1111-4111-8111-111111111111" });
+    if (fault === "task authority commit") {
+      // Model a foreign commit arriving from a host; the normal publication hook
+      // correctly refuses private authority edits before they can be committed.
+      write(join(w.tree, w.source), "Worker changed the authority.\n"); w.g(["add", w.source]); w.g(["-c", "core.hooksPath=/dev/null", "commit", "-qm", "Change private authority"]); w.g(["push", "origin", "HEAD:work/repair"]); w.gh.data.pr.headRefOid = w.g(["rev-parse", "HEAD"]);
+    }
+    if (fault === "remote mismatch") w.gh.data.pr.headRefOid = w.head;
+    const status = w.g(["status", "--porcelain=v1", "-z"]), index = readFileSync(join(w.tree, ".git/index")), bytes = readFileSync(join(w.tree, w.source));
+    w.raw.finish(claudeResultLines(), { exit: 0 }); await w.tick();
+    assert.equal(w.entry().base_repair.status, "blocked", JSON.stringify(w.entry()));
+    assert.equal(w.raw.started.length, 2);
+    assert.equal(w.g(["status", "--porcelain=v1", "-z"]), status);
+    assert.deepEqual(readFileSync(join(w.tree, ".git/index")), index);
+    assert.deepEqual(readFileSync(join(w.tree, w.source)), bytes);
+  });
+});
+
+test("explicit resume reconciles an operator-pushed unsubmitted repair without buying or inventing a run", async t => {
+  const w = continuationWorld(t, { privateBaseUpdate: true });
+  await managedPreviousRun(w);
+  w.ctx.hosts.credential = fakeCredential(null); await w.tick();
+  const before = structuredClone(w.entry().base_repair);
+  assert.equal(before.charged, false); assert.equal(before.run, null);
+  const repaired = await w.resolveMerge(); w.ctx.hosts.credential = fakeCredential();
+  w.ctx.config.harness.claude.bin = join(w.home, "provider-unavailable");
+  requestControl(w.ctx, { handle: w.id, action: "resume", requestId: "operator-push-reconcile" });
+  await applyControl(w.ctx, w.id);
+  const entry = w.entry();
+  assert.equal(entry.control.status, "applied", JSON.stringify(entry));
+  assert.match(entry.control.message, /Watching PR checks/);
+  assert.equal(entry.base_repair.status, "verified");
+  assert.equal(entry.base_repair.operationId, before.operationId);
+  assert.equal(entry.base_repair.charged, false); assert.equal(entry.base_repair.run, null);
+  assert.equal(entry.iteration, 0); assert.equal(w.raw.started.length, 2);
+  assert.equal(w.runner.state().operations[before.operationId], undefined);
+  assert.equal(entry.cursor.fixed_sha, repaired);
+  assert.equal(entry.review_readiness, null); assert.equal(entry.firstPartyReview, null);
+  assert.ok(entry.completionEvidence.delivery.invalidatedAt);
+});
+
+test("operator push recovery refuses incomplete ancestry, remote mismatches and changed ownership", async t => {
+  for (const fault of ["unpushed", "remote", "session", "ledger"]) await t.test(fault, async t => {
+    const w = continuationWorld(t); await managedPreviousRun(w); w.ctx.hosts.credential = fakeCredential(null); await w.tick();
+    const op = structuredClone(w.entry().base_repair);
+    await w.resolveMerge({ push: fault !== "unpushed" }); w.ctx.hosts.credential = fakeCredential();
+    if (fault === "remote") w.gh.data.pr.headRefOid = w.head;
+    if (fault === "session") w.state.update(w.id, { session: "7f1c2d3e-1111-4111-8111-111111111111" });
+    if (fault === "ledger") w.runner.state = () => ({ operations: { [op.operationId]: { acceptance: "unknown" } } });
+    await assert.rejects(resume(w.ctx, { handle: w.id }));
+    assert.equal(w.raw.started.length, 2); assert.equal(w.entry().iteration, 0);
+    assert.notEqual(w.entry().base_repair.status, "verified");
+  });
+});
+
+test("prepared clean merges reconcile an exact push and retain the normal unpushed launch path", async t => {
+  for (const pushed of [true, false]) await t.test(pushed ? "pushed" : "unpushed", async t => {
+    const w = continuationWorld(t, { baseUpdate: "independent" }); await managedPreviousRun(w);
+    w.ctx.hosts.credential = fakeCredential(null); await w.tick();
+    const op = structuredClone(w.entry().base_repair);
+    assert.equal(op.charged, false); assert.ok(op.mergeSha);
+    assert.equal(w.g(["rev-parse", "HEAD"]), op.mergeSha);
+    if (pushed) {
+      w.g(["push", "origin", "HEAD:work/repair"]); w.gh.data.pr.headRefOid = op.mergeSha; w.gh.data.pr.mergeable = "MERGEABLE";
+    }
+    w.ctx.hosts.credential = fakeCredential();
+    const result = await resume(w.ctx, { handle: w.id });
+    assert.equal(w.entry().base_repair.operationId, op.operationId);
+    if (pushed) {
+      assert.equal(result.reconciled, true); assert.equal(w.entry().base_repair.status, "verified");
+      assert.equal(w.entry().base_repair.charged, false); assert.equal(w.entry().base_repair.run, null);
+      assert.equal(w.raw.started.length, 2); assert.equal(w.entry().iteration, 0);
+    } else {
+      assert.equal(w.entry().base_repair.status, "running"); assert.equal(w.entry().base_repair.charged, true);
+      assert.equal(w.entry().base_repair.mergeSha, op.mergeSha); assert.equal(w.raw.started.length, 3); assert.equal(w.entry().iteration, 1);
+    }
+  });
+});
+
+test("operator push reconciliation preserves cancellation and terminal ownership during its final await", async t => {
+  for (const fault of ["cancelled", "merged", "session"]) await t.test(fault, async t => {
+    const w = continuationWorld(t); await managedPreviousRun(w); w.ctx.hosts.credential = fakeCredential(null); await w.tick();
+    const op = structuredClone(w.entry().base_repair);
+    await w.resolveMerge(); w.ctx.hosts.credential = fakeCredential();
+    w.gh.commitDate = async () => {
+      if (fault === "cancelled") w.state.update(w.id, { dispatch_stopped: "cancelled", state: STATES.needsHuman, reason: "cancelled", control: { id: "new-owner", action: "cancel", status: "applied" } });
+      if (fault === "merged") w.state.update(w.id, { state: STATES.done, reason: null });
+      if (fault === "session") w.state.update(w.id, { session: "7f1c2d3e-1111-4111-8111-111111111111" });
+      return T0;
+    };
+    await assert.rejects(resume(w.ctx, { handle: w.id }), /owner|ownership/);
+    assert.notEqual(w.entry().base_repair.status, "verified");
+    assert.equal(w.entry().base_repair.operationId, op.operationId);
+    assert.equal(w.raw.started.length, 2); assert.equal(w.entry().iteration, 0);
+    if (fault === "cancelled") { assert.equal(w.entry().reason, "cancelled"); assert.equal(w.entry().control.id, "new-owner"); }
+    if (fault === "merged") assert.equal(w.entry().state, STATES.done);
+    if (fault === "session") assert.equal(w.entry().session, "7f1c2d3e-1111-4111-8111-111111111111");
+  });
+});
+
+test("private overlay reconciliation preserves an edit racing its cleanliness proof", async t => {
+  const w = world(t, { privateBaseUpdate: true }); await w.tick(); await w.resolveMerge();
+  const clean = w.git.assertClean; let changed = false;
+  w.git.assertClean = async (...args) => {
+    await clean(...args);
+    if (!changed && args[1].some(item => item.privateSource && item.publishedOutput)) {
+      changed = true; write(join(w.tree, w.source), "Concurrent private edit.\n");
+    }
+  };
+  w.raw.finish(claudeResultLines(), { exit: 0 }); await w.tick();
+  assert.ok(changed); assert.equal(w.entry().base_repair.status, "blocked");
+  assert.equal(readFileSync(join(w.tree, w.source), "utf8"), "Concurrent private edit.\n");
+});
+
+test("repair finalization cannot overwrite a replacement operation after its last host await", async t => {
+  const w = continuationWorld(t); await w.tick(); await w.resolveMerge();
+  const { repairKey, repairOperation } = await import("../lib/base_repair.mjs");
+  let replacement;
+  w.gh.commitDate = async () => {
+    const previous = w.runner.current();
+    replacement = { ...w.entry().base_repair, head: w.base, key: repairKey(w.base, w.base),
+      operationId: repairOperation(w.id, w.base, w.base), run: "replacement-run", status: "running" };
+    w.state.update(w.id, { base_repair: replacement, last: { at: T0, run: "replacement-run", exit: null } });
+    w.runner.current = () => ({ ...previous, id: "replacement-run", execution: { ...previous.execution,
+      operationId: replacement.operationId, inputHead: replacement.head, runId: "replacement-run" } });
+    return T0;
+  };
+  w.raw.finish(claudeResultLines(), { exit: 0 }); await w.tick();
+  assert.ok(replacement); assert.deepEqual(w.entry().base_repair, replacement);
+  assert.equal(w.entry().last.run, "replacement-run"); assert.equal(w.entry().last.exit, null);
+  assert.equal(w.raw.started.length, 2);
 });
 
 // A real task can carry a release guide and explicitly approve updating it.
@@ -267,6 +483,31 @@ function withPublishedGuide(w, { eol = "\n" } = {}) {
   w.state.update(w.id, { cursor: { ...w.entry().cursor, fixed_sha: head } });
   return { guide, original, updated, brief, head };
 }
+
+test("coordinator repair prompt identifies immutable private overlays without publishing their contents or outputs", async t => {
+  const w = world(t), doc = withPublishedGuide(w);
+  const approved = w.ctx.readSource(w.id, w.source);
+  await w.tick();
+  assert.equal(w.entry().base_repair.status, "running");
+  const prompt = w.raw.started.at(-1).args.at(-1);
+  const manifest = JSON.parse(prompt.match(/paths and hashes only\):\n(\[[\s\S]*?\n\])/)[1]);
+  const sha256 = text => createHash("sha256").update(text, "utf8").digest("hex");
+  assert.deepEqual(manifest, [
+    { path: w.prd, sha256: sha256(w.ctx.readPrd(w.id)) },
+    { path: w.source, sha256: sha256(approved) },
+  ]);
+  assert.ok(!manifest.some(item => item.path === doc.guide));
+  assert.ok(!prompt.includes(approved.trim()), "private source contents are not embedded in the manifest");
+  for (const pattern of [/expected private context, not unfinished task work/, /Missing or mismatched files, staged context, other dirty files/, /Do not commit, delete, rewrite or resnapshot private context/, /Git itself reports.*overwrite private context/, /Do not merge the PR/, /rebase or force-push/]) assert.match(prompt, pattern);
+  write(join(w.tree, w.source), "Worker-edited instructions are not approval.\n");
+  assert.notEqual(manifest[1].sha256, sha256(readFileSync(join(w.tree, w.source), "utf8")));
+  assert.equal(manifest[1].sha256, sha256(w.ctx.readSource(w.id, w.source)));
+  const edited = world(t);
+  write(join(edited.tree, edited.source), "Worker-edited instructions are not approval.\n");
+  await edited.tick();
+  assert.equal(edited.raw.started.length, 1, "edited context cannot authorize repair dispatch or a new manifest");
+  assert.equal(edited.ctx.readSource(edited.id, edited.source), approved);
+});
 
 for (const host of ["github.com", "bitbucket.org"]) test(`committed published context survives the next review round on ${host}`, async t => {
   for (const baseUpdate of ["none", "independent", "conflict"]) await t.test(baseUpdate, async t => {
@@ -574,6 +815,31 @@ test("live base movement keeps the dispatched SHA pinned and charges another pai
   assert.equal(w.entry().reason, "base-repair-iterations"); assert.equal(w.raw.started.length, 2);
 });
 
+test("base repair uses exact approved input digests when the operator edits a carried source", async t => {
+  for (const fault of ["none", "snapshot", "checkout", "brief"]) await t.test(fault, async t => {
+    const w = world(t), approved = w.ctx.readSource(w.id, w.source), edit = "Planning text for future tasks.\n";
+    w.state.update(w.id, { snapshot_digest: contentDigest(GOOD_PRD), sources_digest: sourceManifestDigest([[w.source, approved]]) });
+    write(join(w.operator, w.source), edit);
+    if (fault === "snapshot") w.ctx.readSource = () => edit;
+    if (fault === "checkout") write(join(w.tree, w.source), edit);
+    if (fault === "brief") write(join(w.operator, w.prd), GOOD_PRD.replace("npm test", "npm run different"));
+    await w.tick();
+    if (fault !== "none") {
+      assert.equal(w.entry().state, STATES.needsHuman);
+      assert.equal(w.raw.started.length, 1);
+      assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
+      return;
+    }
+    assert.equal(w.entry().base_repair?.status, "running", JSON.stringify(w.entry()));
+    await w.resolveMerge();
+    w.raw.finish(claudeResultLines(), { exit: 0 });
+    await w.tick();
+    assert.equal(w.entry().base_repair.status, "verified");
+    assert.equal(readFileSync(join(w.tree, w.source), "utf8"), approved);
+    assert.equal(readFileSync(join(w.operator, w.source), "utf8"), edit);
+  });
+});
+
 test("changed brief, carried instructions, permissions and checkout identity block repair without resnapshot", async t => {
   for (const fault of ["brief", "source", "worktree-source", "permission", "session", "base", "outside", "unsupported"]) await t.test(fault, async t => {
     const w = world(t, fault === "unsupported" ? { host: "example.test" } : {});
@@ -655,11 +921,12 @@ test("normal fix merge refuses a checkout outside the saved worktree root before
 test("an initial abort failure records the conflict and preserves the failed merge without dispatch", async t => {
   const w = world(t); let aborts = 0;
   w.ctx.git = makeGit({ config: w.ctx.config, identity: fakeIdentity(), exec: async (cmd, args, options) => {
-    if (cmd === "git" && args[0] === "merge" && args[1] === "--abort") { aborts++; throw new Error("fixture abort refused"); }
+    if (cmd === "git" && args[0] === "merge" && args[1] === "--abort") { aborts++; throw Object.assign(new Error("fixture index write refused"), { code: "ENOSPC" }); }
     return execFileAsync(cmd, args, options);
   } });
   w.ctx.git.originOf = w.git.originOf; w.ctx.git.ensureHttpsRemote = w.git.ensureHttpsRemote;
   await w.tick();
+  assert.equal(w.entry().base_merge.resourceCode, "ENOSPC");
   assert.equal(w.entry().base_merge.aborted, false); assert.equal(w.entry().base_merge.head, w.head);
   assert.equal(w.entry().base_merge.baseSha, w.base); assert.match(w.entry().base_merge.why, /CONFLICT/);
   assert.equal(w.entry().state, STATES.needsHuman); assert.equal(w.raw.started.length, 1);
@@ -774,6 +1041,12 @@ test("a maintainer merge closes repaired tasks without inventing readiness or re
       base_repair: { ...e.base_repair, status } }));
     const before = structuredClone(w.entry()); let cleaned = 0;
     w.ctx.cleanupMergedWorkspace = async () => { cleaned++; return { status: "retained", reason: "local work preserved" }; };
+    w.g(["merge", "--ff-only", "work/repair"], w.origin);
+    w.gh.containsCommit = async (repository, base, sha) => {
+      assert.equal(repository, w.entry().repo);
+      w.g(["merge-base", "--is-ancestor", sha, base], w.origin);
+      return true;
+    };
     w.gh.data.pr.state = "MERGED"; w.gh.data.pr.mergedAt = at(10); w.gh.data.pr.mergeCommit = { oid: repaired };
     await w.tick();
     assert.equal(w.entry().state, STATES.done); assert.equal(w.entry().reason, null);

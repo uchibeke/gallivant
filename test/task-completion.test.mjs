@@ -37,13 +37,16 @@ test("completion schemas advertise only supported portable milestones and never 
 });
 test("coordinator records bounded current-head check and external-review observations for presentation", async t => {
   const w = world(t, "integrated");
+  const jobs = Array.from({ length: 10 }, (_, index) => ({ name: `test ${index + 1}`, runId: 9981 + index }));
+  w.gh.data.pr.statusCheckRollup = jobs.map(job => checkRun({ ...job, conclusion: "SUCCESS" }));
   await w.tick.tick();
   const before = w.entry(), observation = before.reviewObservation;
   assert.equal(observation.head, "a1b2c3d");
   assert.equal(observation.binding, before.reviewBinding);
-  assert.deepEqual(observation.checks, { settled: true, count: 1 });
+  assert.deepEqual(observation.checks, { settled: true, count: jobs.length, failed: 0,
+    jobs: jobs.slice(0, 8).map(job => ({ ...job, status: "passed" })) });
   assert.equal(observation.external, "clear");
-  assert.ok(JSON.stringify(observation).length < 500);
+  assert.ok(JSON.stringify(observation).length < 750);
   w.clock.advance(2); await w.tick.tick();
   assert.notEqual(w.entry().reviewObservation.observedAt, observation.observedAt);
   assert.equal(w.entry().activity_at, before.activity_at, "poll observations cannot reset meaningful activity");
@@ -98,20 +101,31 @@ test("qualified handoffs retry learning audits after restart without reopening r
   });
 });
 test("ledger ahead of qualified registry is reconciled before handoff stops without another dispatch", async t => {
-  const w = world(t, "delivery_ready"); await w.tick.tick();
+  const provider = "openai-agents";
+  const w = world(t, "delivery_ready", { harness: provider }); await w.tick.tick();
   w.state.update(w.id, { last: { ...w.entry().last, run: "owned-run", exit: 0 } });
-  const current = { id: "owned-run", running: true, execution: { version: 1, provider: "openai-agents", transport: "remote", acceptance: "accepted", providerJobId: "job", turnId: "turn", providerState: "running", collected: false } };
-  let reconciled = 0;
+  const current = { id: "owned-run", running: true, execution: { version: 1, taskId: "acme/widget/other", runId: "owned-run",
+    provider, transport: "remote", acceptance: "accepted", providerJobId: "job", turnId: "turn", providerState: "running", collected: false } };
+  let reconciled = 0, ledgerReads = 0;
   w.runner.current = () => structuredClone(current);
+  w.runner.state = () => { ledgerReads++; return { current: w.runner.current() }; };
   w.runner.reconcile = async () => { reconciled++; current.running = false; current.execution.providerState = "succeeded"; current.execution.collected = true; };
   w.gh.prView = async () => assert.fail("settled handoff cannot read late feedback or dispatch another fix");
   const tick = makeTick({ ...w.deps, executionFor: () => w.runner });
   await tick.tick();
+  assert.equal(reconciled, 0, "a matching run ID from another task is insufficient proof");
+  current.execution.taskId = w.id;
+  w.clock.advance(1);
+  await tick.tick();
   assert.equal(reconciled, 1, "the saved ledger must not be filtered using stale registry proof");
   assert.equal(w.entry().execution.collected, true);
+  assert.equal(w.entry().last.exit, 0, "reconciling the handoff must preserve the recorded exit");
   assert.equal(w.view().monitoring, false);
   assert.equal(w.runner.started.length, 0);
+  const settledReads = ledgerReads;
+  w.clock.advance(1);
   await tick.tick(); assert.equal(reconciled, 1, "historical settled execution does not keep polling");
+  assert.equal(ledgerReads, settledReads, "settled projections need no structural ledger read");
 });
 test("delivery-ready fulfills at the canonical gate; integrated waits for observed external merge without another run", async t => {
   for (const target of ["delivery_ready", "integrated"]) await t.test(target, async t => {

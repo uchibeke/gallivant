@@ -1,7 +1,9 @@
+import { admitFixture } from "./recovery-recipe-fixture.mjs";
 import { inspectReviewLink } from "../lib/review_link.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
@@ -11,9 +13,12 @@ import { messages } from "../lib/notify.mjs";
 import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, reviewVerdict, reviewDisclosure, reviewDigest, REVIEW_DEFAULTS, validateReviewSettings } from "../lib/review_policy.mjs";
 import { DEFAULTS } from "../lib/config.mjs";
 import { redact } from "../lib/execution_io.mjs";
+import { recoveryDeadline, runRecoveryWork } from "../lib/recovery_io.mjs";
+import { recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt, REVIEW_VALIDATION_VERSION } from "../lib/review_evidence.mjs";
-import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
+import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewExecutionId, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { copyReviewImage, inspectReviewImage } from "../lib/review_image.mjs";
+import { makeExecution } from "../lib/execution.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
@@ -196,6 +201,8 @@ test("complete evidence includes deletion context, immutable brief, checks and r
 
 test("only known read failures during evidence capture are marked retryable", async () => {
   for (const [fault, retryable] of [
+    [{ code: "RECOVERY_IO_BUDGET" }, true], [{ code: "SERVICE_COOLDOWN" }, true],
+    [{ code: "GH_TRANSPORT" }, true], [{ code: "GH_RATE_LIMIT", status: 403 }, true],
     [{ code: "BB_TRANSPORT", uncertain: false }, true], [{ code: "BB_TRANSPORT", uncertain: true }, false],
     [{ code: "BB_RATE_LIMIT" }, true], [{ code: "BB_HTTP", status: 503 }, true], [{ code: "BB_HTTP", status: 403 }, false],
     [{ code: "BB_OVERSIZED" }, false], [{ code: "BB_IDENTITY" }, false],
@@ -468,6 +475,44 @@ test("a transient capture read retries without clearance, then reviews the fresh
   await denied.tick.tick(); assert.equal(denied.entry().reason, "first-party-review-failed");
 });
 
+test("expired recovery budgets defer publication and evidence reads until the next due tick", async t => {
+  for (const boundary of ["publication paths", "evidence source", "evidence binding"]) await t.test(boundary, async () => {
+    const w = tickWorld(), reconcile = w.ctx.reviewService.reconcile;
+    let expired = true;
+    const read = (stage, readHost) => async () => {
+      if (expired && stage === boundary) runRecoveryWork(() => recoveryDeadline(), 0);
+      return readHost();
+    };
+    const host = {
+      reviewEvidence: read("evidence source", () => structuredClone(source)),
+      prView: read("evidence binding", w.gh.prView),
+    };
+    w.gh.prDiff = read("publication paths", w.gh.prDiff);
+    w.ctx.reviewService.reconcile = async (id, entry, pr) => {
+      await captureReviewEvidence({ id, entry, pr, host, readPrd: w.ctx.readPrd });
+      return reconcile(id, entry, pr);
+    };
+    for (let i = 0; i < 6; i++) {
+      await w.tick.tick();
+      const entry = w.entry();
+      assert.equal(entry.state, "pr-open");
+      assert.equal(entry.review_next_at, w.ctx.clock.now() + config.poll_seconds * 1000);
+      assert.equal(entry.retry, null);
+      assert.equal(entry.firstPartyReview?.status, undefined);
+      assert.equal(entry.review_readiness, undefined);
+      assert.deepEqual(w.notify.sent, []);
+      assert.deepEqual(await w.tick.tick(), [], "capture waits for the scheduled retry");
+      w.ctx.clock.advance(config.poll_seconds / 60);
+    }
+    expired = false;
+    await w.tick.tick();
+    assert.equal(w.entry().state, "ready-for-human");
+    assert.equal(w.entry().firstPartyReview?.status, "completed");
+    assert.equal(w.calls(), 1);
+    assert.equal(w.runner.started.length, 0);
+  });
+});
+
 function reviewMutationWorld() {
   const w = tickWorld();
   w.ctx.reviewService.preflight = async (_repo, overrides) => selectReviewPolicy({ ...config, reviewer: CONFIG.reviewer,
@@ -691,10 +736,11 @@ test("health expiring during preparation and known busy refusals remain retryabl
     if (reason === "health") w.ctx.git.ensureHttpsRemote = async () => { healthy = false; };
     else w.runner.start = () => {
       assert.equal(w.entry().firstPartyReview.disposition.status, "dispatch-intent");
-      throw Object.assign(new Error("owned runner busy before launch"), { code: "BUSY" });
+      throw Object.assign(new Error("owned runner busy before launch"), { code: "BUSY", dispatchNotSent: true });
     };
     await w.tick.tick(); assert.equal(w.runner.started.length, 0); assert.equal(w.entry().iteration, 0);
     assert.equal(w.entry().firstPartyReview.disposition.status, "pending"); assert.equal(w.entry().state, "pr-open");
+    assert.equal(w.ctx.state.hasAuthorReservation(w.id), false);
     healthy = true; w.ctx.git.ensureHttpsRemote = async () => {}; w.runner.start = start;
     await w.tick.tick(); assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "dispatched");
   }
@@ -797,8 +843,8 @@ test("a transient stopped observation never cancels a reviewer confirmed running
   assert.equal((await service.reconcile(w.id,w.entry,w.pr)).status,"completed");
 });
 
-function reviewServiceWorld() {
-  const w = evidenceWorld(), clock = makeClock(), runners = new Map();
+function reviewServiceWorld(clock = makeClock()) {
+  const w = evidenceWorld(), runners = new Map();
   const calls = { downloads: 0, snapshots: 0, submits: 0, cancellations: 0, settlements: 0 };
   w.gh.reviewEvidence = async () => { calls.downloads++; return { ...structuredClone(source), head: w.pr.headRefOid, base: w.pr.baseRefOid }; };
   w.gh.prView = async () => { calls.snapshots++; return w.pr; };
@@ -806,7 +852,12 @@ function reviewServiceWorld() {
     if (!runners.has(key)) {
       const r = { job: null, result: null,
         prepare: async () => ({ receipt: {}, spec: {} }),
-        submit: async input => { r.job = { id: `run-${++calls.submits}`, name: input.name, running: true }; return r.job; },
+        submit: async (input, guard) => {
+          guard?.();
+          r.beforeDispatch?.();
+          guard?.({ beforeDispatch: true });
+          r.job = { id: `run-${++calls.submits}`, name: input.name, running: true }; return r.job;
+        },
         current: () => r.job, lines: () => [], outcome: () => r.result,
         settle: () => { calls.settlements++; return r.job; },
         cancel: async () => { calls.cancellations++; r.job.running = false; }, sanitize: value => value };
@@ -823,6 +874,191 @@ function reviewServiceWorld() {
     } };
 }
 
+test("a reviewer preparation cannot submit across a scoped disable and enable", async () => {
+  const t = tickWorld(), w = reviewServiceWorld(t.ctx.clock);
+  const { profile } = admitFixture(t.ctx, t.id, "review-output-retry", "codex");
+  w.ctx.state = t.state;
+  const arrived = Promise.withResolvers(), release = Promise.withResolvers(), baseExecutionFor = w.ctx.executionFor;
+  let held = false;
+  w.ctx.executionFor = key => {
+    const runner = baseExecutionFor(key);
+    runner.prepare = async () => {
+      if (!held) { held = true; arrived.resolve(); await release.promise; }
+      return { receipt: {}, spec: {} };
+    };
+    return runner;
+  };
+  const service = w.service(), pending = service.reconcile(t.id, t.entry(), w.pr);
+  await arrived.promise;
+  const scope = `profile/${profile.id}`;
+  for (const [generation, action] of ["disable", "enable"].entries())
+    t.state.setRecoveryHold(scope, action, generation, recoveryAdminIntent(t.state.file, action, scope, generation));
+  release.resolve();
+  await pending;
+  assert.equal(w.calls.submits, 0);
+  assert.equal(Object.values(service.inspect(t.id).jobs)[0].status, "preparing");
+  await service.reconcile(t.id, t.entry(), w.pr);
+  assert.equal(w.calls.submits, 1);
+});
+
+test("a reviewer guard refusal restores preparation while unknown acceptance retains ownership", async t => {
+  for (const boundary of ["before intent", "after intent", "after start"]) await t.test(boundary, async () => {
+    const owner = tickWorld(), w = reviewServiceWorld(owner.ctx.clock);
+    const { profile } = admitFixture(owner.ctx, owner.id, "review-output-retry", "codex");
+    w.ctx.state = owner.state;
+    const scope = `profile/${profile.id}`;
+    const hold = (action, generation) => owner.state.setRecoveryHold(scope, action, generation,
+      recoveryAdminIntent(owner.state.file, action, scope, generation));
+    let rawRun, sends = 0, prepares = 0, execution, injected = false;
+    const raw = {
+      current: () => rawRun ?? null,
+      start(name, _cmd, _args, { runId }) {
+        sends++;
+        if (boundary === "after start") throw Object.assign(new Error("lost launch acknowledgement"), { code: "REVIEW_HELD" });
+        return rawRun = { id: runId, name, running: true, startedAt: w.clock.now(), exit: null };
+      },
+      prepareStart() {
+        if (boundary === "after intent" && !injected) { injected = true; hold("disable", 0); }
+      },
+    };
+    w.ctx.executionFor = taskId => {
+      const runner = makeExecution({ root: join(w.ctx.home, "fixture-execution"), taskId, provider: "codex", runner: raw, clock: w.clock });
+      execution = runner;
+      return {
+        ...runner,
+        prepare: async input => { prepares++; return { receipt: { fixture: prepares }, spec: { cmd: process.execPath, args: [], options: { cwd: input.cwd } } }; },
+        // Exercise the real local dispatch ledger with an in-process launch
+        // and a synthetic preparation receipt.
+        submit({ kind: _kind, preparation: _preparation, ...input }, guard) {
+          if (boundary === "before intent" && !injected) { injected = true; hold("disable", 0); }
+          return runner.submit(input, guard);
+        },
+      };
+    };
+    const service = w.service(), run = () => service.reconcile(owner.id, owner.entry(), w.pr);
+    if (boundary === "after start") {
+      await assert.rejects(run(), { code: "REVIEW_HELD" });
+      assert.equal(execution.current().execution.acceptance, "unknown");
+      const pending = Object.values(service.inspect(owner.id).jobs)[0];
+      assert.equal(pending.status, "launch-intent");
+      await w.service().reconcile(owner.id, owner.entry(), w.pr);
+      assert.equal(sends, 1);
+      assert.equal(prepares, 1);
+      assert.deepEqual(Object.values(service.inspect(owner.id).jobs), [pending]);
+      return;
+    }
+    const paused = await run();
+    assert.equal(paused.status, "running");
+    const ledger = service.inspect(owner.id), job = ledger.jobs[paused.key];
+    assert.equal(job.status, "preparing");
+    assert.equal(job.preparation, undefined);
+    assert.equal(job.run, null);
+    assert.equal(execution.current(), null);
+    assert.deepEqual(execution.state().operations, {});
+    assert.equal(execution.state().dispatchRefusals?.length ?? 0, boundary === "after intent" ? 1 : 0);
+    assert.equal(sends, 0);
+
+    hold("enable", 1);
+    const restarted = w.service();
+    const running = await restarted.reconcile(owner.id, owner.entry(), w.pr);
+    assert.equal(running.key, job.key);
+    assert.equal(execution.current().execution.operationId, `review-${job.key}`);
+    await restarted.reconcile(owner.id, owner.entry(), w.pr);
+    const resumed = restarted.inspect(owner.id);
+    assert.equal(resumed.jobs[job.key].deadline, job.deadline);
+    assert.equal(resumed.jobs[job.key].cancellationUnresolved, undefined);
+    assert.equal(resumed.spentReservedUsd, ledger.spentReservedUsd);
+    assert.equal(prepares, 2);
+    assert.equal(sends, 1);
+  });
+});
+
+test("a new review head preserves uncertain cancellation and waits for exact cessation", async () => {
+  const w = reviewServiceWorld(), service = w.service();
+  const first = await service.reconcile(w.id, w.entry, w.pr);
+  const saved = service.inspect(w.id).jobs[first.key];
+  const original = w.ctx.executionFor(reviewExecutionId(join(w.ctx.home, "reviews"), w.id, first.key));
+  original.cancel = async () => { w.calls.cancellations++; return { confirmed: false }; };
+  w.pr.headRefOid = "d".repeat(40);
+  await assert.rejects(service.reconcile(w.id, w.entry, w.pr), /uncertain cancellation/);
+  assert.equal(service.inspect(w.id).jobs[first.key].cancellationUnresolved, true);
+  await assert.rejects(w.service().reconcile(w.id, w.entry, w.pr), /uncertain cancellation/);
+  assert.equal(w.calls.submits, 1);
+  assert.equal(w.calls.cancellations, 1);
+  w.finish(saved, { endedAt: w.clock.now() });
+  await w.service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(w.calls.submits, 2);
+});
+
+test("expired recovery budgets defer reviewer preparation with the original reservation", async () => {
+  const { ctx, state, id, gh, entry, notify } = tickWorld();
+  const w = reviewServiceWorld(ctx.clock);
+  w.ctx.gh.prView = gh.prView;
+  ctx.config = { ...config, poll_seconds: 30 };
+  w.ctx.config = ctx.config;
+  ctx.executionFor = ctx.runnerFor;
+  const executionFor = w.ctx.executionFor;
+  let preparations = 0;
+  w.ctx.executionFor = key => {
+    const runner = executionFor(key);
+    runner.prepare = async () => {
+      if (++preparations <= 2) runRecoveryWork(() => recoveryDeadline(), 0);
+      return { receipt: {}, spec: {} };
+    };
+    return runner;
+  };
+  const restart = () => {
+    ctx.reviewService = w.service();
+    return makeTick(ctx);
+  };
+  let ticker = restart();
+  await ticker.tick();
+  const waiting = entry().firstPartyReview;
+  assert.equal(preparations, 1, entry().last?.event);
+  assert.equal(entry().state, "pr-open", entry().last?.event);
+  assert.equal(waiting.status, "running");
+  assert.equal(waiting.run, null);
+  assert.equal(waiting.retryAt, ctx.clock.now() + 30_000);
+  const reserved = ctx.reviewService.inspect(id);
+  const job = reserved.jobs[waiting.key];
+  assert.equal(job.status, "preparing");
+  assert.equal(job.prepareAfter, waiting.retryAt);
+  assert.equal(job.retries, 0);
+  assert.equal(w.calls.submits, 0);
+
+  ctx.clock.advance(0.25);
+  state.update(id, { review_next_at: 0 });
+  ticker = restart();
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.host.selected, 1);
+  assert.equal(ticker.metrics.lanes.reviewer.selected, 0);
+  assert.equal(preparations, 1, "a fresh host check still honors the saved preparation wait");
+  assert.deepEqual(ctx.reviewService.inspect(id), reserved);
+
+  ctx.clock.advance(0.25);
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.host.selected, 0);
+  assert.equal(ticker.metrics.lanes.reviewer.selected, 1);
+  assert.equal(preparations, 2);
+  assert.equal(entry().firstPartyReview.retryAt, ctx.clock.now() + 30_000);
+  assert.equal(w.calls.submits, 0);
+
+  ctx.clock.advance(0.5);
+  await ticker.tick();
+  const resumed = ctx.reviewService.inspect(id);
+  assert.deepEqual(Object.keys(resumed.jobs), [job.key]);
+  assert.equal(resumed.spentReservedUsd, reserved.spentReservedUsd);
+  assert.equal(resumed.jobs[job.key].deadline, job.deadline);
+  assert.equal(resumed.jobs[job.key].retries, 0);
+  assert.equal(resumed.retryHistory, undefined);
+  assert.equal(entry().firstPartyReview.retryAt, undefined);
+  assert.equal(entry().firstPartyReview.run, "run-1");
+  assert.equal(w.calls.submits, 1);
+  assert.equal(w.calls.cancellations, 0);
+  assert.equal(entry().state, "pr-open");
+  assert.deepEqual(notify.sent, []);
+});
+
 test("confirmed reviewer capacity and routing failures retry with persisted backoff and the same evidence", async () => {
   for (const error of ["Selected model is at capacity. Please try a different model.", "workspace routing discovery failed"]) {
   const w=reviewServiceWorld();let service=w.service(), record=await service.reconcile(w.id,w.entry,w.pr);
@@ -837,6 +1073,80 @@ test("confirmed reviewer capacity and routing failures retry with persisted back
   w.finish(retry,{endedAt:w.clock.now(),raw:JSON.stringify(clear(retry.evidence))});
   record=await service.reconcile(w.id,w.entry,w.pr);assert.equal(record.status,"completed");
   }
+});
+
+test("a stopped reviewer reaches current-head clearance from its owned capacity retry without an author turn", async () => {
+  const w = reviewServiceWorld(), t = tickWorld();
+  w.id = t.id;
+  w.pr.body = receipt(t.id);
+  t.gh.data.pr = w.pr;
+  const e = t.entry();
+  await t.gh.setRecoveryMetadata(e.repo, e.pr, { prd: e.prd, harness: e.harness, session: e.session, branch: e.branch }, { taskId: t.id });
+  w.pr.body = t.gh.data.pr.body;
+  const after = "a".repeat(110_000) + "\n";
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  const service = w.service();
+  let first, job;
+  for (let piece = 0; piece < 30; piece++) {
+    first = await service.reconcile(w.id, w.entry, w.pr);
+    job = Object.values(service.inspect(w.id).jobs).find(j => j.status === "running");
+    if (job.evidence.version === 3) break;
+    w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(scopedClear(job.evidence)) });
+  }
+  assert.equal(job.evidence.version, 3);
+  const originalCount = w.calls.submits;
+  const accepted = Object.values(service.inspect(w.id).jobs).filter(j => j.status === "completed");
+  assert.ok(accepted.length > 1);
+  w.finish(job, { ok: false, raw: null, error: "Selected model is at capacity. Please try a different model.", endedAt: w.clock.now() });
+  const pending = await service.reconcile(w.id, w.entry, w.pr);
+  assert.equal(pending.status, "running");
+  t.state.update(t.id, { state: "needs-human", reason: "first-party-review-failed", reviewHead: head, reviewBinding: first.binding,
+    cursor: { since: T0, fixed_sha: head }, firstPartyReview: { ...first, status: "failed", errorCode: "REVIEW_PROVIDER" } });
+  const { run, profile } = admitFixture(t.ctx, t.id, "review-output-retry", "codex");
+  const reviewerFor = w.ctx.executionFor;
+  const scope = `profile/${profile.id}`;
+  let refused = false;
+  Object.assign(w.ctx, { state: t.state, clock: w.clock, recoveryQualificationFor: t.ctx.recoveryQualificationFor,
+    executionFor: (id, ...args) => {
+      if (id === t.id) return { current: () => run };
+      const reviewer = reviewerFor(id, ...args);
+      reviewer.beforeDispatch = () => {
+        if (refused) return;
+        refused = true;
+        t.state.setRecoveryHold(scope, "disable", 0, recoveryAdminIntent(t.state.file, "disable", scope, 0));
+      };
+      return reviewer;
+    } });
+  t.ctx.reviewService = w.service();
+  await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(w.calls.submits, originalCount);
+  w.clock.advance(5); t.ctx.clock.advance(5);
+  await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(w.calls.submits, originalCount);
+  const deferred = Object.values(w.service().inspect(t.id).jobs).find(j => j.retryOf === job.key);
+  assert.equal(deferred.status, "preparing");
+  assert.equal(t.entry().recovery_actions.total.paidTurns, 0);
+  t.state.setRecoveryHold(scope, "enable", 1, recoveryAdminIntent(t.state.file, "enable", scope, 1));
+  w.clock.advance(2); t.ctx.clock.advance(2);
+  await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(w.calls.submits, originalCount + 1, JSON.stringify(t.entry().recovery_wait));
+  const retry = Object.values(w.service().inspect(t.id).jobs).find(j => j.retryOf === job.key);
+  assert.equal(retry.key, deferred.key);
+  assert.equal(retry.deadline, deferred.deadline);
+  assert.equal(t.entry().recovery_actions.submittedRecipes["review-output-retry"].paidTurns, 1);
+  assert.equal(t.entry().recovery_actions.total.paidTurns, 1);
+  assert.equal(retry.evidence.digest, job.evidence.digest);
+  w.finish(retry, { endedAt: w.clock.now(), raw: JSON.stringify(clear(retry.evidence)) });
+  t.ctx.clock.advance(5);
+  await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(t.entry().firstPartyReview.result?.reviewedHead, head, JSON.stringify(t.entry().recovery_wait));
+  assert.equal(t.entry().firstPartyReview.result.verdict, "clear");
+  assert.equal(t.entry().state, "pr-open");
+  t.ctx.clock.advance(5); await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(t.entry().state, "ready-for-human", JSON.stringify([t.entry().reason, t.entry().retry, t.entry().reviewBinding]));
+  for (const piece of accepted) assert.deepEqual(w.service().inspect(t.id).jobs[piece.key], piece);
+  assert.equal(w.calls.submits, originalCount + 1); assert.equal(t.runner.started.length, 0);
 });
 
 test("a previously stopped capacity failure can recover the exact owned job after upgrade", async () => {
@@ -1427,9 +1737,10 @@ test("unchanged reviewer polls do not write the registry or refresh the task tim
 test("local reviewer progress is not held behind unrelated provider reconciliation", async () => {
   const old = { key: "captured-review", binding: "old-binding", status: "running" };
   const w = tickWorld({ over: { firstPartyReview: old, review_next_at: Number.MAX_SAFE_INTEGER } });
-  w.ctx.executionFor = () => w.runner;
-  w.runner.reconcile = async () => {};
-  const paused = pauseCall(w.runner, "reconcile");
+  const authorId = "acme/other/active", author = { ...w.runner, current: () => null, reconcile: async () => {} };
+  w.state.put(authorId, { repo: "acme/other", state: "running", harness: "codex", last: { run: "owned-author", exit: null } });
+  w.ctx.executionFor = id => id === authorId ? author : w.runner;
+  const paused = pauseCall(author, "reconcile");
   let progress = 0;
   w.ctx.reviewService.progress = async () => { progress++; return old; };
   w.gh.prView = async () => assert.fail("local review cannot fetch a new host snapshot");

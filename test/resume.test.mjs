@@ -9,6 +9,7 @@ import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { makeGit } from "../lib/git.mjs";
+import { dispatchNotSentError } from "../lib/execution_io.mjs";
 import { join } from "node:path";
 import { CONFIG, T0, tempHome, fakeRunner, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
 
@@ -250,11 +251,27 @@ test("fresh learning resume refuses unresolved work and unrelated sessions", asy
 test("fresh learning resume retries the prepared session after a pre-launch failure", async () => {
   const w = world({ learning_revocation: { freshSessionRequired: true } });
   const launch = w.runner.start; let fail = true;
-  w.runner.start = async (...args) => { if (fail) { fail = false; throw new Error("pre-launch fixture failure"); } return launch(...args); };
+  w.runner.start = async (...args) => { if (fail) { fail = false; throw dispatchNotSentError(new Error("pre-launch fixture failure")); } return launch(...args); };
   await assert.rejects(resume(w.ctx, { handle: w.id, freshSession: true }), /pre-launch/);
   const pending = w.state.get(w.id);
   assert.equal(pending.session, SESSION); assert.equal(pending.learning_continuity.status, "prepared");
+  assert.equal(w.state.hasAuthorReservation(w.id), false);
   const result = await resume(w.ctx, { handle: w.id, freshSession: true });
   assert.equal(result.session, pending.learning_continuity.newSession);
   assert.equal(w.runner.started.length, 1);
+});
+
+test("fresh learning resume retains the author reservation when launch acceptance is unknown", async () => {
+  const w = world({ learning_revocation: { freshSessionRequired: true } });
+  let attempts = 0;
+  w.runner.start = async () => { attempts++; throw new Error("launch acknowledgement unavailable"); };
+  const resumeFresh = () => resume(w.ctx, { handle: w.id, freshSession: true });
+  await assert.rejects(resumeFresh(), /launch acknowledgement unavailable/);
+  const reservation = w.state.load().dispatch.authors[w.id];
+  assert.ok(reservation);
+  w.ctx.state = makeState(w.ctx.home);
+  await assert.rejects(resumeFresh(), { code: "AUTHOR_CAPACITY" });
+  assert.deepEqual(w.ctx.state.load().dispatch.authors[w.id], reservation);
+  assert.equal(w.ctx.state.get(w.id).learning_continuity.status, "prepared");
+  assert.equal(attempts, 1);
 });

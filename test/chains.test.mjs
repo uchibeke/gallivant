@@ -3,8 +3,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
+import { recoveryDeadline, runRecoveryWork } from "../lib/recovery_io.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { queueChain, retryChain, cancelChain, tickChains, chainRows, renderChains } from "../lib/chains.mjs";
+import { compileLinearChain } from "../lib/dependency_plan.mjs";
 import { makeState, STATES } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -111,6 +114,16 @@ async function anchoredWorld(options = {}) {
   w.anchor = selector => queueChain(w.ctx, { name: "follow-on", paths: w.paths.slice(1), after: selector ?? `${REPO}#1` });
   return w;
 }
+
+test("the linear preview adapts the queued CLI description without changing saved chain state", async () => {
+  const w = world({ count: 3 });
+  const chain = await queueChain(w.ctx, { name: "release", paths: w.paths, base: "release/base" });
+  const graph = compileLinearChain(chain);
+  assert.deepEqual(graph.nodes.map(node => [node.taskId, node.base]), chain.steps.map(step => [step.id, "release/base"]));
+  assert.deepEqual(graph.edges, [{ from: "first-step", to: "second-step" }, { from: "second-step", to: "third-step" }]);
+  assert.deepEqual(w.ctx.state.getChain(chain.name), chain);
+  assert.equal(w.starts(), 0);
+});
 
 test("an existing registered PR gates one new milestone without adopting or restarting its run", async () => {
   const w = await anchoredWorld();
@@ -330,22 +343,60 @@ test("queue approves a plan without starting work; ticks start its first PRD exa
   assert.equal(w.clones.length, 1);
 });
 
+test("an expired package preflight leaves an unclaimed chain step scheduled", async () => {
+  const w = world();
+  w.ctx.config.repos = [{ repo: REPO, package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }];
+  let expire = true, probes = 0;
+  const preflight = makePackageAuthPreflight({ fetch: async () => {
+    probes++;
+    return { status: 200, body: { cancel: async () => {} } };
+  } });
+  w.ctx.packageAuthPreflight = input => expire ? runRecoveryWork(() => preflight(input), 0) : preflight(input);
+  await w.queue();
+  await makeTick(w.ctx).tick();
+  const deferred = w.ctx.state.getChain("release");
+  assert.equal(deferred.status, "active");
+  assert.equal(deferred.failures, 0);
+  assert.equal(deferred.steps[0].dispatch, null);
+  assert.equal(w.ctx.state.startClaim(FIRST), null);
+  assert.ok(Date.parse(deferred.rateLimitUntil) > w.ctx.clock.now());
+  assert.equal(probes, 0);
+  assert.equal(w.clones.length, 0);
+  assert.equal(w.starts(), 0);
+
+  expire = false;
+  w.ctx.state = makeState(w.home);
+  const ticker = makeTick(w.ctx);
+  await ticker.tick();
+  assert.equal(probes, 0);
+  w.ctx.clock.set(deferred.rateLimitUntil);
+  await ticker.tick();
+  assert.equal(probes, 1);
+  assert.equal(w.starts(), 1);
+  assert.ok(w.ctx.state.get(FIRST));
+});
+
 test("Bitbucket rate limiting pauses a queued chain without consuming its failure budget", async () => {
   const w = world();
   await w.queue();
+  let reads = 0;
   w.ctx.gh.refSha = async () => {
+    reads++;
     const error = new Error("Bitbucket API rate limited");
     error.code = "BB_RATE_LIMIT";
+    error.retryAfter = "172800";
     throw error;
   };
   await tickChains(w.ctx);
   const paused = w.ctx.state.getChain("release");
   assert.equal(paused.status, "active");
   assert.equal(paused.failures, 0);
-  assert.ok(Date.parse(paused.rateLimitUntil) > Date.now() + 10 * 60_000);
+  assert.equal(Date.parse(paused.rateLimitUntil), w.ctx.clock.now() + 172800_000);
+  w.ctx.clock.advance(120);
   for (let i = 0; i < 6; i++) await tickChains(w.ctx);
   assert.equal(w.ctx.state.getChain("release").status, "active");
   assert.equal(w.starts(), 0);
+  assert.equal(reads, 1, "the former two-hour cap cannot advance a server deadline");
 });
 
 test("an active legacy-prefix milestone survives upgrade and its neutral-prefix successor still waits for merge", async () => {
@@ -751,6 +802,49 @@ test("the normal daemon tick settles entries before advancing their chains and d
   assert.equal(w.ctx.state.get(SECOND).state, STATES.running);
 });
 
+for (const cancelled of [false, true]) test(`a slow chain checkout leaves polling live and ${cancelled ? "honors cancellation" : "launches once"}`, { timeout: 20_000 }, async t => {
+  const w = world(), checkoutStarted = Promise.withResolvers(), finishCheckout = Promise.withResolvers();
+  t.after(() => finishCheckout.resolve());
+  await w.queue();
+  const create = w.ctx.git.create;
+  let checkoutCalls = 0;
+  w.ctx.git.create = async spec => {
+    spec.dispatchGuard();
+    checkoutCalls++;
+    checkoutStarted.resolve(recoveryDeadline(300_000));
+    await finishCheckout.promise;
+    const path = await create(spec);
+    spec.dispatchGuard();
+    return path;
+  };
+  const ticker = makeTick({ ...w.ctx, backgroundDependencies: true });
+  const firstTick = ticker.tick();
+  assert.equal(await checkoutStarted.promise, 300_000, "Git keeps its operation timeout during a scheduler sweep");
+  await firstTick;
+  const claim = w.ctx.state.startClaim(FIRST);
+  assert.ok(claim?.clone);
+  assert.equal(w.starts(), 0);
+
+  w.ctx.clock.advance(CONFIG.poll_seconds / 60);
+  await ticker.tick();
+  assert.equal(w.ctx.state.startClaim(FIRST).token, claim.token);
+  assert.equal(checkoutCalls, 1, "a later sweep does not replace an owned preparation");
+  if (cancelled) cancelChain(w.ctx, "release");
+
+  const pending = tickChains(w.ctx, () => []);
+  finishCheckout.resolve();
+  await pending;
+  assert.equal(w.starts(), cancelled ? 0 : 1);
+  assert.equal(w.ctx.state.getChain("release").status, cancelled ? "cancelled" : "active");
+  if (cancelled) {
+    assert.equal(w.ctx.state.startClaim(FIRST).unsent, true);
+    assert.equal(w.ctx.state.get(FIRST), null);
+  } else {
+    assert.equal(w.ctx.state.get(FIRST).start_token, claim.token);
+    assert.equal(w.ctx.state.startClaim(FIRST), null);
+  }
+});
+
 test("a maintainer merge retires the owned live author before releasing its chain successor", async () => {
   const w = world(), executions = new Map();
   w.ctx.executionFor = (id, provider) => {
@@ -787,7 +881,7 @@ test("fast progress ticks retain chain review cadence, bound outage retries and 
   w.ctx.gh.prView = async (...args) => { reads++; return prView(...args); };
   w.ctx.clock.advance(2); await tick.tick(); assert.equal(reads, 1);
   for (let i = 0; i < 11; i++) { w.ctx.clock.advance(1 / 6); await tick.tick(); }
-  assert.equal(reads, 1); assert.equal(w.starts(), 1); assert.ok(progress >= 12);
+  assert.equal(reads, 1); assert.equal(w.starts(), 1); assert.equal(progress, 0, "settled predecessor history has no author polls");
   w.ctx.clock.advance(1 / 6); await tick.tick(); assert.equal(reads, 2);
   w.ctx.gh.prView = async () => { reads++; throw new Error("GitHub offline"); };
   w.ctx.clock.advance(2); await tick.tick(); assert.equal(w.ctx.state.getChain("release").failures, 1);
@@ -883,4 +977,33 @@ test("chain review hides protected paths, preserves legacy unknowns and refuses 
   w.ctx.gh.repoInfo = async () => ({ nameWithOwner: "other/widget", defaultBranch: "main" });
   await assert.rejects(reviewChainRetry(w.ctx, { name: "release", resnapshot: true }), /repository or task identity/);
   assert.equal(w.ctx.state.getChain("release").status, "stopped"); assert.equal(w.starts(), 0);
+});
+
+test("external merge of a stopped predecessor waits for retained cleanup and releases one successor across restart", async () => {
+  const w = await anchoredWorld();
+  await w.anchor();
+  w.markPr(FIRST, { state: "MERGED", entryState: STATES.needsHuman });
+  w.ctx.state.update(FIRST, { reason: "reviewer-silent" });
+  let cleanups = 0;
+  w.ctx.cleanupMergedWorkspace = async (_id, entry, pr) => ({ status: ++cleanups === 1 ? "pending" : "retained",
+    reason: "local work", pr: entry.pr, head: pr.headRefOid });
+  const poll = async () => {
+    w.ctx.clock.advance(2);
+    await makeTick(w.ctx).tickEntry(FIRST, w.ctx.state.get(FIRST));
+    await tickChains(w.ctx);
+  };
+  await poll();
+  assert.equal(w.starts(), 1);
+  assert.equal(w.ctx.state.get(FIRST).workspace_cleanup.status, "pending");
+  w.ctx.state = makeState(w.home);
+  await poll();
+  const predecessor = w.ctx.state.get(FIRST);
+  assert.equal(predecessor.workspace_cleanup.status, "retained");
+  assert.equal(predecessor.completionEvidence.terminal.mergeCommit, MERGE);
+  assert.equal(predecessor.completionEvidence.integration.qualified, false);
+  await tickChains(w.ctx);
+  w.ctx.state = makeState(w.home);
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2);
+  assert.equal(cleanups, 2);
 });

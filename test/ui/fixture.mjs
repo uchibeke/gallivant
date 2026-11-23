@@ -45,7 +45,7 @@ export async function fixture({ runtime = new URL("../../", import.meta.url), em
       });
       const dir = join(home, "runs", idSlug(id), RUN);
       mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, "job.json"), JSON.stringify({ id: RUN, name: "fix", bin: "/fixture/no-executable",
+      writeFileSync(join(dir, "job.json"), JSON.stringify({ id: RUN, name: "fix", harness: "codex", bin: "/fixture/no-executable",
         pid: 0, startedAt: Date.parse(NOW) - 1_800_000, endedAt: Date.parse(NOW) - 600_000, exit: 0,
         ...(live && i === 0 ? { bin: null, pid: null, exit: null, endedAt: null,
           execution: { provider: "fixture", transport: "remote", providerState: "running", acceptance: "accepted", providerJobId: "fixture-job", turnId: "fixture-turn" } } : {}),
