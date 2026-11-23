@@ -97,6 +97,42 @@ test("expensive parameterized package cases get named units rather than accumula
   }
 });
 
+test("CI separates package builds and budgets measured Ubuntu and macOS runtimes", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const plugin = "test/plugin-package.test.mjs";
+  const release = "test/release-package.test.mjs";
+  const delivery = "test/runtime-delivery.test.mjs";
+  // Ubuntu Node 24 shard 7 of run 45262854572, rounded up.
+  const builds = new Map([
+    ["one builder emits registered PKCE auth and all review metadata into the ZIP", 25],
+    ["explicit OAuth default scopes preserve nonempty values independently of mandatory base scopes", 25],
+    ["configured listing copy is reproducible in the ZIP without changing identity or review metadata", 24],
+    ["internal packaging records npm controls without claiming public qualification", 23],
+    ["disposable preview identity is distinct and cannot enter a public candidate", 24],
+  ]);
+  const jobs = parallelShards(shardUnits(testUnits(root, [plugin, release, delivery], weights)));
+  const lanes = jobs.flatMap(job => job.lanes);
+  for (const [name, seconds] of builds) {
+    const unit = lanes.flat().find(unit => unit.file === plugin && unit.names?.includes(name));
+    assert.ok(unit?.seconds >= seconds, `${name} needs at least ${seconds}s`);
+  }
+  for (const lane of lanes) {
+    assert.ok(lane.filter(unit => unit.file === plugin && unit.names?.some(name => builds.has(name))).length <= 1,
+      "the measured package builds must run in separate lanes");
+  }
+
+  // Ubuntu and macOS Node 22 shard 2 of run 45251902539 took 76s and 72s for release assembly.
+  const assemblyName = "release assembly reuses the packager and keeps evidence outside the public ZIP";
+  const assembly = lanes.flat().find(unit => unit.file === release && unit.names?.includes(assemblyName));
+  assert.ok(assembly?.seconds >= 76, "release assembly needs at least 76s");
+  const assemblyJob = jobs.find(job => job.lanes.some(lane => lane.includes(assembly)));
+  assert.deepEqual(assemblyJob.lanes, [[assembly]], "release assembly must have its own job");
+  // The runtime-delivery file took 16.44s on macOS Node 22 shard 7 of the same run.
+  const runtime = lanes.flat().find(unit => unit.file === delivery && unit.whole);
+  assert.ok(runtime?.seconds >= 17, "runtime delivery needs at least 17s");
+});
+
 test("indexing parses JavaScript rather than treating string examples as registrations", () => {
   const source = `import { test as scenario } from 'node:test';
     const example = 'test("fake",()=>{})';
@@ -128,6 +164,83 @@ test("a measured slow residual gets its own lane even when literal cases are che
   assert.equal(lanes.length, 2);
   assert.deepEqual(lanes[0].units, [{ file, residual: true, exclude: ["a"], seconds: 48 }]);
   assert.deepEqual(lanes[1].units[0].names, ["a"]);
+});
+
+test("a lane above the normal budget runs in a job of its own", () => {
+  const long = { file: "test/slow.test.mjs", seconds: 65 };
+  const short = { file: "test/fast.test.mjs", seconds: 5 };
+  const jobs = parallelShards(shardUnits([long, short]));
+  assert.deepEqual(jobs.map(job => job.lanes), [[[short]], [[long]]]);
+});
+
+test("CI budgets intake cases using the observed slow macOS run", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const units = testUnits(root, ["test/task-intake.test.mjs"], weights);
+  // Case timings from macOS Node 22 shard 4 of run 45258601164, rounded up.
+  const observed = new Map([
+    ["CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch", 18],
+    ["target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", 61],
+    ["typed delivery request corpus preserves traceability and authority (1/8)", 39],
+    ["typed delivery request corpus preserves traceability and authority (2/8)", 37],
+    ["typed delivery request corpus preserves traceability and authority (3/8)", 24],
+  ]);
+  for (const [name, duration] of observed) {
+    const unit = units.find(unit => unit.names?.includes(name));
+    assert.ok(unit?.seconds >= duration, `${name} needs at least ${duration}s in the macOS plan`);
+  }
+});
+
+test("CI splits the recovery journal using observed macOS case runtimes", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const journal = "test/recovery-git-journal.test.mjs";
+  const dependency = "test/dependency-plan-dispatch.test.mjs";
+  const units = testUnits(root, [journal, dependency], weights);
+  const journalUnits = units.filter(unit => unit.file === journal);
+  // Completed top-level cases before macOS Node 22 shard 23 of run 45268499589 timed out.
+  const observed = new Map([
+    ["concurrent branch change and a failed push preserve the repair without replay", 18],
+    ["failed paid repair and unknown submission remain observation-only", 14],
+    ["journaled merge preserves both parents and the tracked identity while restoring private context", 11],
+    ["a terminal author's staged resolutions survive an interrupted commit acknowledgement", 10],
+    ["lost push acknowledgement observes the exact remote without another push or paid launch", 9],
+  ]);
+  for (const [name, seconds] of observed) {
+    const unit = journalUnits.find(unit => unit.names?.includes(name));
+    assert.ok(unit?.seconds >= seconds, `${name} needs its own budget of at least ${seconds}s`);
+  }
+  const names = indexFile(readFileSync(join(root, journal), "utf8")).names.sort();
+  assert.deepEqual(journalUnits.flatMap(unit => unit.names || []).sort(), names);
+  assert.deepEqual(journalUnits.filter(unit => unit.residual).map(unit => [...unit.exclude].sort()), [names]);
+  const journalLanes = shardUnits(units).filter(lane => lane.units.some(unit => unit.file === journal));
+  assert.ok(journalLanes.length > 1);
+  assert.ok(journalLanes.every(lane => !lane.isolated), "the journal must fit into ordinary lanes");
+  // Preserve the whole-file budget from the macOS run 45210691674.
+  assert.ok(units.some(unit => unit.file === dependency && unit.whole && unit.seconds >= 21));
+});
+
+test("CI budgets measured whole-file runtimes and splits the Agents fixture suite", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const agents = "test/openai-agents.test.mjs";
+  // Peak whole-file times in the macOS lanes of run 45268499589, rounded up.
+  const observed = new Map([
+    ["test/chains.test.mjs", 31],
+    ["test/codex-cloud.test.mjs", 30],
+    ["test/first-party-review.test.mjs", 41],
+    ["test/runtime-delivery.test.mjs", 38],
+  ]);
+  const units = testUnits(root, [agents, ...observed.keys()], weights);
+  const split = units.filter(unit => unit.file === agents);
+  const names = indexFile(readFileSync(join(root, agents), "utf8")).names.sort();
+  assert.deepEqual(split.flatMap(unit => unit.names || []).sort(), names);
+  const residual = split.filter(unit => unit.residual);
+  assert.deepEqual(residual.map(unit => [...unit.exclude].sort()), [names]);
+  // The dynamic cases accounted for 25.41s on macOS Node 22 in run 45251902539.
+  assert.ok(residual[0].seconds >= 26);
+  for (const [file, seconds] of observed)
+    assert.ok(units.some(unit => unit.file === file && unit.whole && unit.seconds >= seconds), file);
 });
 
 test("real sharded Node execution retains nested, dynamic, aliased and prefix-overlapping tests exactly once", t => {
