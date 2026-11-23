@@ -33,6 +33,27 @@ test("chain CLI shows persisted progress, retries explicitly and cancels future 
   }
 });
 
+test("ci-timing writes the saved activation and revision to stdout in text and JSON", () => {
+  const { home, state } = seededState();
+  const revision = "a".repeat(64);
+  writeJsonAtomic(join(home, "config.json"), { ...CONFIG, notify: null, repos: [{ repo: "acme/widget", ci_timing: "after-review" }] });
+  writeJsonAtomic(state.file, { ...state.load(), ciPilot: {
+    phase: "active", digest: revision, proposal: { repo: "acme/widget", base: "main" },
+  } });
+  const run = (...args) => spawnSync(process.execPath, [new URL("../bin/gallivant.mjs", import.meta.url).pathname, "ci-timing", ...args], {
+    env: { ...process.env, GALLIVANT_HOME: home }, encoding: "utf8", timeout: 5000,
+  });
+  const text = run("acme/widget");
+  assert.equal(text.status, 0, text.stderr);
+  assert.equal(text.stdout, `acme/widget · CI after review\nActive\nApproval revision ${revision}\n`);
+  const json = run("acme/widget", "--json");
+  assert.equal(json.status, 0, json.stderr);
+  assert.deepEqual(JSON.parse(json.stdout), { timing: "after-review", activation: "Active", revision });
+  const unset = run("acme/other");
+  assert.equal(unset.status, 0, unset.stderr);
+  assert.equal(unset.stdout, "acme/other · CI immediately\nDefault\n");
+});
+
 test("ready --check ignores invalid runtime config and leaves the brief and home unchanged", () => {
   const home = tempHome();
   const path = join(tempHome(), "docs/prds/widget-export.md");

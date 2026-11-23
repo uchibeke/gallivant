@@ -364,6 +364,13 @@ plan format 2. Existing version 4 and 5 registries remain readable. A pinned
 namespace requires the matching artifact manifest before accepting the new
 format. [Plan controls and rollback](dependency-plans.md#references-and-rollback)
 
+## Repository CI timing
+
+Use `ci_timing: "immediate"` to save an explicit repository choice. The
+default is immediate CI. `ci_timing: "after-review"` requires the separately
+approved private GitHub setup and qualified worker boundary. See [CI timing,
+activation and rollback](ci-timing.md).
+
 ## What is deliberately not a key
 
 Two bounds the daemon enforces have no setting, and both are fixed numbers with their reasoning written at the

@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { PNG } from 'pngjs';
 import { createHash } from 'node:crypto';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFile, execFileSync, spawnSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { RELEASE_CHECKS, releaseIdentity, evaluateRelease, releasePreflight, verifyReleasePayload, readReleaseJson, assembleRelease } from '../lib/release_package.mjs';
 import { packagingControlInventory, packagingControl, runtimeFile } from '../lib/plugin_package.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -254,7 +255,7 @@ test('bounded JSON and opt-in commands cannot silently start live work', t => {
 });
 
 // Actual emitted artifacts remain explicitly labeled fixtures in this offline test.
-test('release assembly reuses the packager and keeps evidence outside the public ZIP', t => {
+test('release assembly reuses the packager and keeps evidence outside the public ZIP', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'release-assembly-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const ui = join(dir, 'ui.html'), icon = join(dir, 'icon.png');
   writeFileSync(ui, '<html>Offline fixture</html>');
@@ -263,7 +264,22 @@ test('release assembly reuses the packager and keeps evidence outside the public
   const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const { deployment } = candidate();
   const out = join(dir, 'release');
-  const built = assembleRelease({ config, sourceCommit, coreVersion: CORE_VERSION, out, internal: true, deployment });
+  const input = { config, sourceCommit, coreVersion: CORE_VERSION, out, internal: true, deployment };
+  const changedInput = {
+    ...input, config: { ...config, resource: { ...config.resource, uri: 'ui://task-delivery/next' } },
+    out: join(dir, 'changed-resource'),
+  };
+  const exec = promisify(execFile);
+  const build = `import { assembleRelease } from './lib/release_package.mjs';
+    process.stdout.write(JSON.stringify(assembleRelease(JSON.parse(process.argv[1]))));`;
+  // The isolated CI lane can build both variants independently. Wait for both
+  // children to exit before cleaning up their output, even if one fails.
+  const results = await Promise.allSettled([input, changedInput].map(variant =>
+    exec(process.execPath, ['--input-type=module', '-e', build, JSON.stringify(variant)])));
+  const [built, changed] = results.map(result => {
+    if (result.status === 'rejected') throw result.reason;
+    return JSON.parse(result.value.stdout);
+  });
   assert.equal(built.evaluation.status, 'needs-human');
   assert.deepEqual(built.manifest.release.deployment, deployment);
   assert.equal(built.manifest.release.states.submissionReady, false);
@@ -302,7 +318,6 @@ test('release assembly reuses the packager and keeps evidence outside the public
   assert.deepEqual(built.manifest.packagingControlHashes, committedControls);
   assert.ok(committedControls['.gitignore'], 'actual build records controls omitted from npm payload');
   assert.equal(built.manifest.payloadHashes['.gitignore'], undefined);
-  const changed = assembleRelease({ config: { ...config, resource: { ...config.resource, uri: 'ui://task-delivery/next' } }, sourceCommit, coreVersion: CORE_VERSION, out: join(dir, 'changed-resource'), internal: true, deployment });
   assert.equal(changed.manifest.coreSha256, built.manifest.coreSha256);
   assert.equal(changed.manifest.hashes.plugin, built.manifest.hashes.plugin);
   assert.equal(changed.manifest.hashes.operations, built.manifest.hashes.operations);
@@ -336,6 +351,6 @@ test('release assembly reuses the packager and keeps evidence outside the public
   assert.equal(installedVerification.status, 1);
   assert.match(installedVerification.stderr, /Candidate bytes changed: START-HERE.md/);
 
-  assert.throws(() => assembleRelease({ config, sourceCommit, coreVersion: CORE_VERSION, out, internal: true, deployment }), /empty bounded/);
+  assert.throws(() => assembleRelease(input), /empty bounded/);
   assert.ok(readFileSync(join(out, 'manifest.json')).length, 'occupied output must survive');
 });

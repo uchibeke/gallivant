@@ -136,12 +136,13 @@ export function shardUnits(units, budget = SHARD_SECONDS) {
     let shard = unit.isolated ? null : shards.find(s => !s.isolated && s.seconds + cost(s) <= budget);
     if (!shard) { shard = { units: [], seconds: 0, isolated: Boolean(unit.isolated) }; shards.push(shard); }
     shard.seconds += cost(shard); shard.units.push(unit);
+    shard.isolated ||= shard.seconds > budget;
   }
   return shards;
 }
 
-// Pair independent lanes on the two-core CI runners. Setup happens once per
-// job, while the CPU measurement remains completely alone.
+// Pair ordinary lanes on the two-core CI runners. Over-budget lanes and the
+// CPU measurement get their own jobs.
 export function parallelShards(shards) {
   const jobs = [], ordinary = shards.filter(s => !s.isolated);
   for (let index = 0; index < ordinary.length; index += 2) {
