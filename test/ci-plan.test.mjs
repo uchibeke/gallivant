@@ -191,19 +191,33 @@ test("CI budgets intake cases using the observed slow macOS run", () => {
   }
 });
 
-test("CI sharding accounts for the observed macOS recovery and dependency runtimes", () => {
+test("CI splits the recovery journal using observed macOS case runtimes", () => {
   const root = fileURLToPath(new URL("..", import.meta.url));
   const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
-  // Whole-file elapsed seconds, rounded up, from runs 45216984469 and 45210691674.
+  const journal = "test/recovery-git-journal.test.mjs";
+  const dependency = "test/dependency-plan-dispatch.test.mjs";
+  const units = testUnits(root, [journal, dependency], weights);
+  const journalUnits = units.filter(unit => unit.file === journal);
+  // Completed top-level cases before macOS Node 22 shard 23 of run 45268499589 timed out.
   const observed = new Map([
-    ["test/recovery-git-journal.test.mjs", 57],
-    ["test/dependency-plan-dispatch.test.mjs", 21],
+    ["concurrent branch change and a failed push preserve the repair without replay", 18],
+    ["failed paid repair and unknown submission remain observation-only", 14],
+    ["journaled merge preserves both parents and the tracked identity while restoring private context", 11],
+    ["a terminal author's staged resolutions survive an interrupted commit acknowledgement", 10],
+    ["lost push acknowledgement observes the exact remote without another push or paid launch", 9],
   ]);
-  const lanes = shardUnits(testUnits(root, [...observed.keys()], weights));
-  for (const lane of lanes) {
-    const elapsed = lane.units.reduce((sum, unit) => sum + observed.get(unit.file), 0);
-    assert.ok(lane.seconds >= elapsed, `macOS lane estimated ${lane.seconds}s for ${elapsed}s of observed work`);
+  for (const [name, seconds] of observed) {
+    const unit = journalUnits.find(unit => unit.names?.includes(name));
+    assert.ok(unit?.seconds >= seconds, `${name} needs its own budget of at least ${seconds}s`);
   }
+  const names = indexFile(readFileSync(join(root, journal), "utf8")).names.sort();
+  assert.deepEqual(journalUnits.flatMap(unit => unit.names || []).sort(), names);
+  assert.deepEqual(journalUnits.filter(unit => unit.residual).map(unit => [...unit.exclude].sort()), [names]);
+  const journalLanes = shardUnits(units).filter(lane => lane.units.some(unit => unit.file === journal));
+  assert.ok(journalLanes.length > 1);
+  assert.ok(journalLanes.every(lane => !lane.isolated), "the journal must fit into ordinary lanes");
+  // Preserve the whole-file budget from the macOS run 45210691674.
+  assert.ok(units.some(unit => unit.file === dependency && unit.whole && unit.seconds >= 21));
 });
 
 test("real sharded Node execution retains nested, dynamic, aliased and prefix-overlapping tests exactly once", t => {
