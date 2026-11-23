@@ -59,6 +59,7 @@ test("the selected workflow keeps its automatic events and shares the original c
     const rendered = renderPilotWorkflow(source, p), generated = parse(rendered.text);
     const jobs = generated.jobs, selected = jobs.browser, gate = jobs.review_ci_candidate;
     assert.deepEqual(Object.fromEntries(Object.entries(generated.on).filter(([key]) => key !== "workflow_dispatch")), parse(source).on);
+    assert.equal(Object.hasOwn(generated, "concurrency"), false);
     assert.equal(selected.name, "Browser suite");
     assert.equal(selected.steps.at(-1).run, "npm run test:ui");
     assert.equal(selected.steps[0].with["persist-credentials"], false);
@@ -73,6 +74,43 @@ test("the selected workflow keeps its automatic events and shares the original c
   }
   assert.throws(() => renderPilotWorkflow(original.replace(/@f{40}/, "@v4"), proposal), { code: "CI_UNSUPPORTED" });
   assert.throws(() => renderPilotWorkflow(original.replace("run: npm", "continue-on-error: true\n        run: npm"), proposal), { code: "CI_UNSUPPORTED" });
+});
+
+test("dispatch concurrency isolates runs and attempts on the shared tag without changing automatic grouping", () => {
+  const source = original + "concurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n";
+  const rendered = renderPilotWorkflow(source, proposal);
+  const generated = parse(rendered.text);
+  assert.deepEqual(generated.concurrency, {
+    group: "${{ github.event_name == 'workflow_dispatch' && format('post-review-ci:{0}:{1}', github.run_id, github.run_attempt) || (format('{0}-{1}', github.workflow, github.ref)) }}",
+    "cancel-in-progress": "${{ github.event_name != 'workflow_dispatch' }}",
+  });
+  assert.equal(verifyPilotWorkflow(source, rendered.text, proposal).workflowName, "Browser");
+  const sharedGroup = rendered.text.replace(generated.concurrency.group, parse(source).concurrency.group);
+  assert.throws(() => verifyPilotWorkflow(source, sharedGroup, proposal), { code: "CI_DRIFT" });
+});
+
+test("dispatch concurrency preserves automatic literal, expression and queue settings", () => {
+  const render = concurrency => parse(renderPilotWorkflow(original + concurrency + "\n", proposal).text).concurrency;
+  assert.match(render("concurrency: Don't deploy {prod}"), /\|\| \('Don''t deploy \{prod\}'\) \}\}$/);
+  assert.deepEqual(render("concurrency:\n  group: ${{ github.head_ref || github.ref }}\n  queue: max\n  cancel-in-progress: false"), {
+    group: "${{ github.event_name == 'workflow_dispatch' && format('post-review-ci:{0}:{1}', github.run_id, github.run_attempt) || (github.head_ref || github.ref) }}",
+    queue: "max",
+    "cancel-in-progress": false,
+  });
+  const templated = render("concurrency:\n  group: Team's {CI} ${{ format('v {{}} {0}', github.ref) }} done\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
+  assert.match(templated.group, /format\('Team''s \{\{CI\}\} \{0\} done', format\('v \{\{\}\} \{0\}', github\.ref\)\)/);
+  assert.equal(templated["cancel-in-progress"], "${{ github.event_name != 'workflow_dispatch' && (github.event_name == 'pull_request') }}");
+});
+
+test("dispatch workflow rendering rejects unsupported concurrency settings", () => {
+  for (const concurrency of [
+    "concurrency: [group]",
+    "concurrency: ${{ github.ref",
+    "concurrency:\n  group: valid\n  cancel-in-progress: str-${{ true }}",
+    "concurrency:\n  group: valid\n  queue: max\n  cancel-in-progress: true",
+  ]) {
+    assert.throws(() => renderPilotWorkflow(original + concurrency + "\n", proposal), { code: "CI_UNSUPPORTED" });
+  }
 });
 
 test("the generated candidate step admits only the current exact approval, head, base and test merge", async () => {

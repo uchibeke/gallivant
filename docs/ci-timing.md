@@ -59,6 +59,8 @@ installation token.
    secrets. Use the workflow's original head, base or test-merge checkout.
    The transformed workflow keeps its automatic events and required job names,
    calls the same tests for both triggers, and disables shared cache writes.
+   Automatic events retain their concurrency policy. Each dispatch run and
+   attempt has its own group when the workflow uses concurrency.
    Review and install the file on the protected base and immutable dispatch
    tag. Leave workflows for other suites and their triggers in place.
 3. Through the protected operator ingress, submit `preview` then `approve`
