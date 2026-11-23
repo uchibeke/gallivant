@@ -26,6 +26,23 @@ async function open(t, options = {}) {
 const path = (base = "", run = RUN) => `${base}/run?id=${encodeURIComponent(TASK)}&run=${run}&theme=dark`;
 const ready = page => page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
 
+test("deferred CI uses the existing workspace for verified review, run and failed job evidence", { timeout: 30_000 }, async t => {
+  const { page, origin, state } = await open(t);
+  const reviewUrl = "https://github.com/acme/atlas/pull/42#pullrequestreview-98";
+  const runUrl = "https://github.com/acme/atlas/actions/runs/1234";
+  state.update(TASK, { state: "pr-open", reason: null, firstPartyReview: null, ciTiming: { version: 1, timing: "after-review", revision: "b".repeat(64) },
+    ciProgress: { head: "fixture-head", phase: "failed", reviewUrl, runUrl, attempt: 1,
+      failure: { name: "Browser suite", url: runUrl + "/job/8" }, next: "Inspect the failing job before approving a retry." } });
+  await page.goto(origin + path());
+  await ready(page);
+  await page.getByText("Delivery & permissions", { exact: true }).click();
+  assert.match(await page.locator('[data-key="delivery-permissions"]').innerText(), /After review/);
+  assert.equal(await page.getByRole("link", { name: "Browser suite · attempt 1" }).getAttribute("href"), runUrl + "/job/8");
+  assert.equal(await page.getByRole("link", { name: "Verified review" }).getAttribute("href"), reviewUrl);
+  assert.equal(await page.getByRole("link", { name: "Verified Actions run" }).getAttribute("href"), runUrl);
+  assert.equal(await page.getByRole("button", { name: "Recheck PR", exact: true }).count(), 1);
+});
+
 test("workspace separates canonical evidence, findings, execution metadata and source freshness", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);
   for (const base of ["", "/gallivant"]) {

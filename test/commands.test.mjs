@@ -59,6 +59,21 @@ function startWorld({ credential = fakeCredential(), identity = fakeIdentity() }
   return { ctx, prdPath, worktree, snapshots, home };
 }
 
+test("shared start refuses pending after-review setup before cloning and leaves immediate CI unset in repository config", async () => {
+  const pending = startWorld(), id = "acme/widget/widget-export";
+  pending.ctx.config.repos = [{ repo: "acme/widget", ci_timing: "after-review" }];
+  pending.ctx.git.create = () => assert.fail("pending activation must stop before clone");
+  await assert.rejects(start(pending.ctx, { path: pending.prdPath }), { code: "CI_SETUP_PENDING" });
+  assert.equal(pending.ctx.state.startClaim(id), null);
+  assert.equal(pending.ctx.state.get(id), null);
+  assert.equal(readFileSync(pending.prdPath, "utf8"), GOOD_PRD);
+  const immediate = startWorld();
+  const result = await start(immediate.ctx, { path: immediate.prdPath });
+  assert.equal(result.ciTiming.timing, "immediate");
+  assert.equal(immediate.ctx.state.get(result.id).ciTiming.revision, null);
+  assert.deepEqual(JSON.parse(readFileSync(join(immediate.home, "config.json"))).repos, ["acme/widget"]);
+});
+
 test("start refuses old, unreadable and signed-out harnesses before cloning, snapshotting or spawning", async () => {
   for (const options of [{ version: "0.155.1" }, { version: "unknown" }, { signedIn: false }]) {
     const w = startWorld();
