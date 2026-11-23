@@ -15,6 +15,7 @@ import { canonicalPath, readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { bindPlanOperator, recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { hosts } from "../lib/hosts.mjs";
 import { makeRecoverySchedule, RECOVERY_LANES } from "../lib/recovery_schedule.mjs";
+import { recoveryDeadline } from "../lib/recovery_io.mjs";
 import { makeRecoveryCooldowns, providerScope } from "../lib/recovery_cooldown.mjs";
 import { RECOVERY_REGISTRY_VERSION } from "../lib/registry_versions.mjs";
 import { PLAN_RUNTIME_FORMAT, checkRuntimeState, migrateRuntimeState } from "../lib/runtime_state.mjs";
@@ -188,6 +189,7 @@ test("independent starts overlap and a hold generation changed during clone fenc
   const raw = w.ctx.runnerFor(`${PRODUCER}/fast`), spawn = raw.start;
   raw.start = (...args) => { const job = spawn(...args); launched.resolve(); return job; };
   git.create = async spec => {
+    assert.equal(recoveryDeadline(300_000), 300_000, "plan checkout keeps its Git timeout");
     if (spec.prdId === "slow") { entered.resolve(); await release.promise; }
     return clone(spec);
   };

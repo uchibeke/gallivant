@@ -164,6 +164,8 @@ gallivant chain launch --retry
 Retry does not approve edited briefs, reset iteration counts, or turn an unmerged PR into a satisfied dependency.
 It applies only to a stopped chain. If you reopen a closed PR and want Gallivant to continue its review loop, register
 that PR again before retrying the chain; a locally `done` run is not resumed merely by reopening its GitHub PR.
+Chain and approved YAML plan launches use Git and host operation timeouts. The standalone coordinator keeps polling existing tasks
+during checkout and revalidates the chain's approval and predecessor merges before launching the author.
 If a daemon stopped during dispatch and cannot prove whether a session started, the chain stops for inspection.
 Check the chain detail, `gallivant why <handle>` when an entry exists, the run logs and `~/.gallivant/daemon.log`.
 Retry never clears an ambiguous pending-start claim. Do not delete claims or worktrees merely to force another
