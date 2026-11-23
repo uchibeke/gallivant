@@ -130,6 +130,31 @@ test("a measured slow residual gets its own lane even when literal cases are che
   assert.deepEqual(lanes[1].units[0].names, ["a"]);
 });
 
+test("a lane above the normal budget runs in a job of its own", () => {
+  const long = { file: "test/slow.test.mjs", seconds: 65 };
+  const short = { file: "test/fast.test.mjs", seconds: 5 };
+  const jobs = parallelShards(shardUnits([long, short]));
+  assert.deepEqual(jobs.map(job => job.lanes), [[[short]], [[long]]]);
+});
+
+test("CI budgets intake cases using the observed slow macOS run", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const units = testUnits(root, ["test/task-intake.test.mjs"], weights);
+  // Case timings from macOS Node 22 shard 4 of run 45258601164, rounded up.
+  const observed = new Map([
+    ["CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch", 18],
+    ["target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", 61],
+    ["typed delivery request corpus preserves traceability and authority (1/8)", 39],
+    ["typed delivery request corpus preserves traceability and authority (2/8)", 37],
+    ["typed delivery request corpus preserves traceability and authority (3/8)", 24],
+  ]);
+  for (const [name, duration] of observed) {
+    const unit = units.find(unit => unit.names?.includes(name));
+    assert.ok(unit?.seconds >= duration, `${name} needs at least ${duration}s in the macOS plan`);
+  }
+});
+
 test("CI sharding accounts for the observed macOS recovery and dependency runtimes", () => {
   const root = fileURLToPath(new URL("..", import.meta.url));
   const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
