@@ -16,6 +16,7 @@ import { bindPlanOperator } from "../lib/operator_intent.mjs";
 import { taskPresentation } from "../lib/tracker/presentation.mjs";
 import { normalizePublicBody } from "../lib/block.mjs";
 import { at, checkRun, CONFIG, fakeGh, fakeGit, fakeNotify, fakeRunner, GOOD_PRD, makeClock, prFixture, seededState, silentLog, T0 } from "./helpers.mjs";
+import { admitFixture } from "./recovery-recipe-fixture.mjs";
 import { RECEIPT_TAG } from "../lib/deliverable.mjs";
 
 const base = "a".repeat(40), head = "b".repeat(40), merge = "c".repeat(40), revision = "d".repeat(40);
@@ -282,8 +283,10 @@ function pilotWorld() {
   const isolation = () => ({ registry: state.file, qualified: true, workerExcluded: true, launchDigest: approval.launch, authorRoute: approval.authorRoute, expiresAt: Date.parse(at(100)) });
   const deps = { home, state, config, gh, git: fakeGit(), ownLogin: "me", runnerFor: () => runner,
     readPrd: () => null, clock, notify: fakeNotify(), log: silentLog, deferredCI: deferredCIService({ transport, isolation }) };
-  const approve = (id = 8, userId = 101, commit = head) => normalizeEvent({ user: { id: userId, login: "reviewer[bot]", type: "Bot" },
-    id, commit_id: commit, submitted_at: at(4), state: "APPROVED", body: "" }, "review");
+  const approve = (id = 8, userId = 101, commit = head, submittedAt = at(4)) => normalizeEvent({
+    user: { id: userId, login: "reviewer[bot]", type: "Bot" }, id, commit_id: commit, submitted_at: submittedAt,
+    state: "APPROVED", body: "",
+  }, "review");
   return { deps, id, state, approval, pr, gh, clock, observation, requests, cancellations, runner, isolation, approve };
 }
 
@@ -395,4 +398,53 @@ test("a successful run needs the reporting App observation and the full delivery
   w.observation.row = runRow(w.requests[0], { run_attempt: 2 });
   await tick.tickEntry(w.id, read());
   assert.equal(read().state, "pr-open");
+});
+
+test("a late exact approval restores stopped deferred CI to watching through qualified recovery", async () => {
+  const w = pilotWorld(), read = () => w.state.get(w.id);
+  w.deps.config = { ...w.deps.config, stall_hours: 0.1 };
+  w.deps.readPrd = () => GOOD_PRD;
+  const { run } = admitFixture(w.deps, w.id, "feedback-continuation", "codex");
+  w.runner.current = () => run;
+  w.state.update(w.id, { rereview: { at: at(3), nudged: false } });
+  w.clock.set(at(20));
+  const tick = makeTick(w.deps);
+  await tick.tickEntry(w.id, read());
+  assert.equal(read().state, "needs-human");
+  assert.equal(read().reason, "reviewer-silent");
+  const { cursor, rereview, reviewBinding: binding } = read();
+
+  for (const reviews of [[], [w.approve(8, 101, head, at(2))], [w.approve(8, 101, base, at(21))],
+    [w.approve(8, 102, head, at(21))]]) {
+    w.gh.data.reviews = reviews;
+    w.clock.advance(3);
+    await tick.tickEntry(w.id, read());
+    assert.equal(read().state, "needs-human");
+    assert.equal(read().reason, "reviewer-silent");
+    assert.equal(read().recovery_wait.phase, "waiting-external");
+    assert.equal(w.requests.length, 0);
+  }
+
+  w.gh.data.reviews = [w.approve(9, 101, head, at(33))];
+  w.clock.advance(3);
+  await tick.tickEntry(w.id, read());
+  assert.equal(read().state, "pr-open", JSON.stringify(read().recovery_wait));
+  assert.equal(read().reason, null);
+  assert.equal(read().recovery_wait, null);
+  assert.deepEqual(read().cursor, cursor);
+  assert.deepEqual(read().rereview, rereview);
+  assert.equal(read().reviewBinding, binding);
+  assert.equal(read().reviewObservation.external, "clear");
+  assert.equal(read().reviewObservation.checks.settled, false);
+  assert.equal(w.requests.length, 0);
+  assert.equal(read().recovery_actions.total.paidTurns, 0);
+
+  w.clock.advance(3);
+  await tick.tickEntry(w.id, read());
+  assert.equal(w.requests.length, 1);
+  assert.deepEqual(w.requests[0].review, { id: 9, actor: 101, head, at: at(33) });
+  assert.equal(read().ciProgress.phase, "submitting");
+  assert.equal(read().state, "pr-open");
+  assert.equal(read().reviewObservation.checks.settled, false);
+  assert.equal(w.runner.started.length, 0);
 });
