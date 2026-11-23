@@ -220,6 +220,29 @@ test("CI splits the recovery journal using observed macOS case runtimes", () => 
   assert.ok(units.some(unit => unit.file === dependency && unit.whole && unit.seconds >= 21));
 });
 
+test("CI budgets measured whole-file runtimes and splits the Agents fixture suite", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const agents = "test/openai-agents.test.mjs";
+  // Peak whole-file times in the macOS lanes of run 45268499589, rounded up.
+  const observed = new Map([
+    ["test/chains.test.mjs", 31],
+    ["test/codex-cloud.test.mjs", 30],
+    ["test/first-party-review.test.mjs", 41],
+    ["test/runtime-delivery.test.mjs", 38],
+  ]);
+  const units = testUnits(root, [agents, ...observed.keys()], weights);
+  const split = units.filter(unit => unit.file === agents);
+  const names = indexFile(readFileSync(join(root, agents), "utf8")).names.sort();
+  assert.deepEqual(split.flatMap(unit => unit.names || []).sort(), names);
+  const residual = split.filter(unit => unit.residual);
+  assert.deepEqual(residual.map(unit => [...unit.exclude].sort()), [names]);
+  // The dynamic cases accounted for 25.41s on macOS Node 22 in run 45251902539.
+  assert.ok(residual[0].seconds >= 26);
+  for (const [file, seconds] of observed)
+    assert.ok(units.some(unit => unit.file === file && unit.whole && unit.seconds >= seconds), file);
+});
+
 test("real sharded Node execution retains nested, dynamic, aliased and prefix-overlapping tests exactly once", t => {
   const { root, put } = fixture(t);
   put("package.json", '{"type":"module"}');
