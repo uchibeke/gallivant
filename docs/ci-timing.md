@@ -46,7 +46,7 @@ installation token.
 1. Keep the base's existing required checks and no-bypass, stale-review
    dismissal and up-to-date rules active. The pilot uses repository rulesets.
    Protect the enrollment namespace with
-   `refs/heads/[rR][eE][vV][iI][eE][wW]-[cC][iI]/*`, restriction on creation
+   `refs/heads/[rR][eE][vV][iI][eE][wW]-[cC][iI]/**/*`, restriction on creation
    and deletion, and no force pushes. The case-insensitive selector matches
    the whole reserved namespace. Protect a dedicated lightweight dispatch tag
    named `review-ci-dispatch-<revision>` with creation, update and deletion
@@ -56,9 +56,13 @@ installation token.
    `lib/hosts/github_ci_workflow.mjs`. The version-one format accepts one
    selected workflow containing unconditional, statically named
    GitHub-hosted jobs, full-SHA action pins, a credential-free checkout and no
-   secrets. Use the workflow's original head, base or test-merge checkout.
-   The transformed workflow keeps its automatic events and required job names,
-   calls the same tests for both triggers, and disables shared cache writes.
+   secrets. The eligible events are `pull_request`, `push`, `release` and
+   `schedule`. Use the workflow's original head, base or test-merge checkout.
+   The transformed workflow preserves the automatic event filters and required
+   job names. While the selector is enabled, the selected jobs wait for review
+   on enrolled PRs and on pushes to the protected enrollment namespace, even
+   before a PR exists. Base pushes, other branch and tag pushes, releases and
+   scheduled runs use their original tests. Shared cache writes are disabled.
    Automatic events retain their concurrency policy. Each dispatch run and
    attempt has its own group when the workflow uses concurrency.
    Review and install the file on the protected base and immutable dispatch
@@ -74,6 +78,8 @@ installation token.
 4. Separately authorize the live pilot. Set `CI_AFTER_REVIEW=enabled` in the
    disposable repo only. Exercise the blocked enrolled head, clear an enrolled
    head and dispatch its exact review and candidate, and run an unenrolled PR.
+   Push to the enrolled branch before clearance and record that the selected
+   jobs consume zero runner-minutes across its PR and push events.
    Submit `qualify` with the approval digest as `revision` and `canary`
    containing `blocked`, `deferred` and `automatic` records. Each has
    numeric `pr` and `run` fields. The deferred record also gives `request`

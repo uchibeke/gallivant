@@ -7,7 +7,7 @@ import { makeTick } from "../lib/tick.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { selectReviewPolicy, reviewBinding } from "../lib/review_policy.mjs";
 import { normalizeEvent } from "../lib/hosts/github.mjs";
-import { renderPilotWorkflow, verifyPilotWorkflow, candidateJob, checkContext, requestName } from "../lib/hosts/github_ci_workflow.mjs";
+import { pilotProposal, renderPilotWorkflow, verifyPilotWorkflow, candidateJob, checkContext, requestName } from "../lib/hosts/github_ci_workflow.mjs";
 import { githubDeferredCI } from "../lib/hosts/github_deferred_ci.mjs";
 import { deferredCIService } from "../lib/deferred_ci.mjs";
 import { maintainDeferredCI } from "../lib/deferred_ci_run.mjs";
@@ -74,6 +74,46 @@ test("the selected workflow keeps its automatic events and shares the original c
   }
   assert.throws(() => renderPilotWorkflow(original.replace(/@f{40}/, "@v4"), proposal), { code: "CI_UNSUPPORTED" });
   assert.throws(() => renderPilotWorkflow(original.replace("run: npm", "continue-on-error: true\n        run: npm"), proposal), { code: "CI_UNSUPPORTED" });
+});
+
+test("automatic CI defers enrolled PRs and branch pushes while preserving other events and rollback", () => {
+  const source = original.replace("  push:\n    branches: [main]", "  push: {}");
+  const rendered = renderPilotWorkflow(source, proposal);
+  const generated = parse(rendered.text);
+  assert.deepEqual(generated.on.push, {});
+  const condition = generated.jobs.browser.if.slice(3, -2);
+  const runs = (name, event, { repo = 7, timing = "enabled", guard = "skipped" } = {}) => runInNewContext(condition, {
+    github: { event_name: name, repository_id: String(repo), event },
+    needs: { review_ci_candidate: { result: guard } },
+    vars: { CI_AFTER_REVIEW: timing },
+    cancelled: () => false,
+    startsWith: (value, prefix) => value.toLowerCase().startsWith(prefix.toLowerCase()),
+  });
+  for (const ref of [`refs/heads/${branch}`, "refs/heads/Review-CI/nested/task"]) {
+    assert.equal(runs("push", { ref }), false, ref);
+    assert.equal(runs("push", { ref }, { timing: "" }), true, "rollback restores push CI");
+    assert.equal(runs("push", { ref }, { repo: 8 }), true, "another repository keeps push CI");
+  }
+  for (const ref of ["refs/heads/main", "refs/heads/work/older-task", "refs/tags/review-ci/v1"]) {
+    assert.equal(runs("push", { ref }), true, ref);
+  }
+  const pr = (ref = branch, base = "main", repo = 7) => ({ pull_request: { head: { ref, repo: { id: repo } }, base: { ref: base } } });
+  assert.equal(runs("pull_request", pr()), false);
+  assert.equal(runs("pull_request", pr("work/older-task")), true);
+  assert.equal(runs("pull_request", pr(branch, "develop")), true);
+  assert.equal(runs("pull_request", pr(branch, "main", 8)), true);
+  assert.equal(runs("pull_request", pr(), { timing: "" }), true);
+  for (const event of ["release", "schedule"]) assert.equal(runs(event, {}), true, event);
+  assert.equal(runs("workflow_dispatch", {}), false);
+  assert.equal(runs("workflow_dispatch", {}, { guard: "success" }), true);
+});
+
+test("pilot setup rejects additional automation events and a protected base inside the enrollment namespace", () => {
+  for (const event of ["pull_request_target", "pull_request_review", "create", "workflow_run"]) {
+    const source = original.replace("on:\n", `on:\n  ${event}: {}\n`);
+    assert.throws(() => renderPilotWorkflow(source, proposal), { code: "CI_UNSUPPORTED" });
+  }
+  assert.throws(() => pilotProposal({ ...proposal, base: "Review-CI/base" }), { code: "CI_SETUP_INVALID" });
 });
 
 test("dispatch concurrency isolates runs and attempts on the shared tag without changing automatic grouping", () => {
