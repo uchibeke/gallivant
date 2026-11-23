@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
-import { runRecoveryWork } from "../lib/recovery_io.mjs";
+import { recoveryDeadline, runRecoveryWork } from "../lib/recovery_io.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { queueChain, retryChain, cancelChain, tickChains, chainRows, renderChains } from "../lib/chains.mjs";
 import { compileLinearChain } from "../lib/dependency_plan.mjs";
@@ -800,6 +800,49 @@ test("the normal daemon tick settles entries before advancing their chains and d
   await daemon.tick();
   assert.equal(w.starts(), 2);
   assert.equal(w.ctx.state.get(SECOND).state, STATES.running);
+});
+
+for (const cancelled of [false, true]) test(`a slow chain checkout leaves polling live and ${cancelled ? "honors cancellation" : "launches once"}`, { timeout: 20_000 }, async t => {
+  const w = world(), checkoutStarted = Promise.withResolvers(), finishCheckout = Promise.withResolvers();
+  t.after(() => finishCheckout.resolve());
+  await w.queue();
+  const create = w.ctx.git.create;
+  let checkoutCalls = 0;
+  w.ctx.git.create = async spec => {
+    spec.dispatchGuard();
+    checkoutCalls++;
+    checkoutStarted.resolve(recoveryDeadline(300_000));
+    await finishCheckout.promise;
+    const path = await create(spec);
+    spec.dispatchGuard();
+    return path;
+  };
+  const ticker = makeTick({ ...w.ctx, backgroundDependencies: true });
+  const firstTick = ticker.tick();
+  assert.equal(await checkoutStarted.promise, 300_000, "Git keeps its operation timeout during a scheduler sweep");
+  await firstTick;
+  const claim = w.ctx.state.startClaim(FIRST);
+  assert.ok(claim?.clone);
+  assert.equal(w.starts(), 0);
+
+  w.ctx.clock.advance(CONFIG.poll_seconds / 60);
+  await ticker.tick();
+  assert.equal(w.ctx.state.startClaim(FIRST).token, claim.token);
+  assert.equal(checkoutCalls, 1, "a later sweep does not replace an owned preparation");
+  if (cancelled) cancelChain(w.ctx, "release");
+
+  const pending = tickChains(w.ctx, () => []);
+  finishCheckout.resolve();
+  await pending;
+  assert.equal(w.starts(), cancelled ? 0 : 1);
+  assert.equal(w.ctx.state.getChain("release").status, cancelled ? "cancelled" : "active");
+  if (cancelled) {
+    assert.equal(w.ctx.state.startClaim(FIRST).unsent, true);
+    assert.equal(w.ctx.state.get(FIRST), null);
+  } else {
+    assert.equal(w.ctx.state.get(FIRST).start_token, claim.token);
+    assert.equal(w.ctx.state.startClaim(FIRST), null);
+  }
 });
 
 test("a maintainer merge retires the owned live author before releasing its chain successor", async () => {
