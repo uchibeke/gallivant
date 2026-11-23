@@ -97,6 +97,42 @@ test("expensive parameterized package cases get named units rather than accumula
   }
 });
 
+test("CI separates package builds and budgets measured Ubuntu and macOS runtimes", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const plugin = "test/plugin-package.test.mjs";
+  const release = "test/release-package.test.mjs";
+  const delivery = "test/runtime-delivery.test.mjs";
+  // Ubuntu Node 24 shard 7 of run 45262854572, rounded up.
+  const builds = new Map([
+    ["one builder emits registered PKCE auth and all review metadata into the ZIP", 25],
+    ["explicit OAuth default scopes preserve nonempty values independently of mandatory base scopes", 25],
+    ["configured listing copy is reproducible in the ZIP without changing identity or review metadata", 24],
+    ["internal packaging records npm controls without claiming public qualification", 23],
+    ["disposable preview identity is distinct and cannot enter a public candidate", 24],
+  ]);
+  const jobs = parallelShards(shardUnits(testUnits(root, [plugin, release, delivery], weights)));
+  const lanes = jobs.flatMap(job => job.lanes);
+  for (const [name, seconds] of builds) {
+    const unit = lanes.flat().find(unit => unit.file === plugin && unit.names?.includes(name));
+    assert.ok(unit?.seconds >= seconds, `${name} needs at least ${seconds}s`);
+  }
+  for (const lane of lanes) {
+    assert.ok(lane.filter(unit => unit.file === plugin && unit.names?.some(name => builds.has(name))).length <= 1,
+      "the measured package builds must run in separate lanes");
+  }
+
+  // Ubuntu and macOS Node 22 shard 2 of run 45251902539 took 76s and 72s for release assembly.
+  const assemblyName = "release assembly reuses the packager and keeps evidence outside the public ZIP";
+  const assembly = lanes.flat().find(unit => unit.file === release && unit.names?.includes(assemblyName));
+  assert.ok(assembly?.seconds >= 76, "release assembly needs at least 76s");
+  const assemblyJob = jobs.find(job => job.lanes.some(lane => lane.includes(assembly)));
+  assert.deepEqual(assemblyJob.lanes, [[assembly]], "release assembly must have its own job");
+  // The runtime-delivery file took 16.44s on macOS Node 22 shard 7 of the same run.
+  const runtime = lanes.flat().find(unit => unit.file === delivery && unit.whole);
+  assert.ok(runtime?.seconds >= 17, "runtime delivery needs at least 17s");
+});
+
 test("indexing parses JavaScript rather than treating string examples as registrations", () => {
   const source = `import { test as scenario } from 'node:test';
     const example = 'test("fake",()=>{})';

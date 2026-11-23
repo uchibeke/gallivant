@@ -39,11 +39,11 @@ dynamic names, suites, aliases and future registration forms. Nested tests stay
 with their parent; overlapping name prefixes stay together. The sharder never
 rewrites test bodies or skips a corpus because it is expensive.
 
-`scripts/ci-weights.json` contains advisory timings from completed macOS test
-executions. New tests receive a small default weight and enter the normal test
-inventory. Jobs can pair two lanes estimated at up to 50 seconds each,
-sharing setup and leaving room for process startup. A lane estimated to take
-longer than 50 seconds runs in its own job.
+`scripts/ci-weights.json` contains conservative estimates based on completed
+Ubuntu and macOS test executions. New tests receive a small default weight and
+enter the normal test inventory. Jobs can pair two lanes estimated at up to 50
+seconds each, sharing setup and leaving room for process startup. A lane
+estimated to take longer than 50 seconds runs in its own job.
 Measured whole-file timings account for suites whose dynamic cases are absent
 from the literal test index. Slow parameterized pack operations have explicit
 top-level names with shared assertion helpers, so one residual cannot accumulate
