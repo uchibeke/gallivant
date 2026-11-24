@@ -305,7 +305,7 @@ function renderPlanReview(review, data) {
 }
 
 (() => {
-  const root = document.querySelector('[data-plan-approval]');
+  const root = document.querySelector?.('[data-plan-approval]');
   if (!root) return;
   const $ = id => document.getElementById('approval-' + id);
   const requestId = root.dataset.planApproval, submit = $('submit'), proposal = $('proposal');

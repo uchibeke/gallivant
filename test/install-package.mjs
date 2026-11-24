@@ -215,7 +215,10 @@ esac
       if (page) {
         await page.goto(`${ui.origin}${base}/?theme=light`);
         const tasks = page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Tasks", exact: true });
-        await tasks.click();
+        await Promise.all([
+          page.waitForURL(url => url.pathname === `${base}/tasks`, { waitUntil: "domcontentloaded" }),
+          tasks.click(),
+        ]);
         assert.equal(new URL(page.url()).pathname, `${base}/tasks`);
         assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
         assert.equal(await tasks.getAttribute("aria-current"), "page");
