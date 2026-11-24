@@ -263,10 +263,16 @@ configuration. Use `plan preview FILE --json` to inspect repository bindings,
 source and base-file hashes, configured routes and limits when host access is
 available. Report unverified capabilities from the output as such.
 
-Have the operator review the exact digest in the terminal before running
-`gallivant plan queue FILE --approve DIGEST`. Use the same file and checkout
-arguments. The coordinator owns the saved approval across terminal closure and
-restart. Keep active claims and snapshots in place when reviewing a migration.
+Use `gallivant plan request FILE --approve REVISION --request-id REQUEST_ID`
+with the preview's digest, request ID and checkout arguments. Give the operator
+the returned approval link. A host with an authenticated operator session and
+a recorded confirmation for this exact request and revision can pass that
+consent through the protected tool endpoint. The adapter resolves the digest
+and presents the action before recording consent, so the operator does not
+have to type the digest. Keep sessions and approval capabilities on the host
+side. A shell session or transcript has no consent channel by itself. Open the
+same browser link when the host cannot convey consent.
+[Tool host integration](app.md#plan-approval-links-and-tool-hosts)
 [Dependency plan configuration](config.md#dependency-plan-admission)
 [Dependency plan commands](commands.md)
 

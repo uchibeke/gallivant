@@ -36,7 +36,7 @@ const path = (world, base = "", params = {}) => `${world.origin}${base}/plans?${
 const dependencies = page => page.locator("[data-plan-list]");
 const detail = page => page.locator("#selected-plan-node");
 const review = page => page.getByRole("dialog", { name: /Review plan/ });
-const submit = page => review(page).getByRole("button", { name: "Confirm reviewed action" });
+const submit = page => review(page).locator("#plan-submit");
 const status = page => page.locator("#plan-action-status");
 const show = (page, text) => page.getByText(text, { exact: false }).first().waitFor();
 const ready = page => page.waitForFunction(() => !document.getElementById("plan-submit").disabled);
@@ -286,7 +286,7 @@ test("import rejects malformed and private references before unapproved reads an
   await show(page, "requires a protected operator session");
 });
 
-test("changed previews require review and a dropped confirmation response observes the original receipt", { timeout: 45000 }, async t => {
+test("a changed preview requires a fresh review before saving its mounted approval link", { timeout: 45000 }, async t => {
   const world = await open(t), { page, state } = world;
   world.brief("snapshot");
   await page.goto(path(world, MOUNT, { theme: "light" }));
@@ -294,41 +294,20 @@ test("changed previews require review and a dropped confirmation response observ
   await paste(page, encode(manifest("exact-review", [task("snapshot")])));
   const before = await previewReply(page);
   world.brief("snapshot", "\nA changed input must have a new approval.\n");
-  await submit(page).click(); await finished(page);
+  const save = review(page).getByRole("button", { name: "Create approval request" });
+  await save.click(); await finished(page);
   assert.match(await status(page).textContent(), /Plan inputs, bindings or approval changed/);
   assert.equal(state.load().plans?.instances.length ?? 0, 0);
-  assert.ok(await submit(page).isDisabled());
+  assert.ok(await save.isDisabled());
   await close(page);
   const afterReview = await previewReply(page);
   assert.notEqual(before.revision, afterReview.revision);
-  const posts = [];
-  await page.route("**/api/plan/control", async route => {
-    const command = route.request().postDataJSON(); posts.push(command);
-    if (command.stage !== "confirm") return route.continue();
-    const response = await route.fetch({ timeout: 10000 });
-    assert.equal(response.status(), 200);
-    await response.dispose();
-    await route.abort("failed");
-  });
-  await submit(page).evaluate(button => { button.click(); button.click(); }); await finished(page);
-  assert.match(await status(page).textContent(), /Plan accepted for coordinator dispatch/);
-  assert.deepEqual(posts.map(p => p.stage), ["confirm", "reconcile"]);
-  assert.ok(posts.every(post => post.requestId === afterReview.requestId && post.approve === afterReview.revision));
-  assert.equal(state.load().plans.instances.length, 1);
-  const token = await page.locator("main[data-token]").getAttribute("data-token");
-  const hostReads = world.calls.length;
-  const replay = await page.request.post(world.origin + MOUNT + "/api/plan/control", {
-    headers: { origin: world.origin, "x-gallivant-token": token }, data: posts[0],
-  });
-  assert.equal(replay.status(), 200);
-  assert.equal((await replay.json()).instanceId, state.load().plans.instances[0].id);
-  await replay.dispose();
-  assert.equal(world.calls.length, hostReads, "reconciling or repeating the exact receipt does not recompile");
+  await save.evaluate(button => { button.click(); button.click(); });
+  await page.waitForURL(url => url.pathname === MOUNT + "/plans" && url.searchParams.get("approval") === afterReview.saveRequestId);
+  await show(page, "Pending approval");
+  assert.equal(state.load().plans.instances.length, 0);
+  assert.equal(state.load().plans.reviews.length, 1);
   assert.equal(world.spawned(), 0);
-  await review(page).getByRole("link", { name: "Open saved plan" }).click();
-  await page.waitForURL(url => url.searchParams.has("plan"));
-  assert.match(await detail(page).textContent(), /Queued/);
-  assert.match(await detail(page).textContent(), /Task link available after registration/);
 });
 
 test("group reviews show affected future nodes and retain independent worker controls", { timeout: 40000 }, async t => {

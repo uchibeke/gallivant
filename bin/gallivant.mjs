@@ -75,6 +75,11 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]
                                          compile a local JSON or YAML dependency plan for inspection
   gallivant plan preview <file> [--dir <directory>] [--checkout <relative-directory>]
+  gallivant plan request <file> --approve <revision> [--request-id <id>]
+                                         save a pending review and return its approval link
+  gallivant plan approval <request-id>   inspect the saved review or admission receipt
+  gallivant plan approve <request-id> --approve <revision>
+                                         resolve the exact request and return its receipt or browser approval link
   gallivant plan queue <file> --approve <digest> [--request-id <id>]
                                          queue the exact reviewed plan through the private local service
   gallivant plan session --repo <owner/repo> [--repo <owner/repo> ...]
@@ -187,6 +192,24 @@ async function planCommand(args, values) {
   }
   const { planControl, PLAN_CONTROL_ACTIONS, previewPlan, queuePlan, inspectPlan, migratePlans } = await import("../lib/dependency_plan_admission.mjs");
   const { callLocalPlans } = await import("../lib/local_plan_service.mjs");
+  if (["request", "approval", "approve"].includes(action)) {
+    const creating = action === "request";
+    if (args.length !== 2 || !fields(...(creating ? ["dir", "checkout", "approve", "request-id"] : action === "approve" ? ["approve"] : [])) ||
+        action !== "approval" && !/^[a-f0-9]{64}$/.test(values.approve ?? "")) {
+      throw new Error("Use plan request FILE --approve REVISION, plan approval REQUEST_ID or plan approve REQUEST_ID --approve REVISION.");
+    }
+    const { newPlanReviewId } = await import("../lib/dependency_plan_registry.mjs");
+    const home = gallivantHome();
+    const result = await callLocalPlans(home, creating
+      ? { op: "control", action: "queue", stage: "save", requestId: values["request-id"] ?? newPlanReviewId(),
+        approve: values.approve, input: { file: target, options: compileOptions } }
+      : { op: "approval", requestId: target });
+    if (action === "approve" && result.revision !== values.approve) throw new Error("The supplied revision does not match the saved request. Review the approval link.");
+    const { proposal: _proposal, ...reference } = result;
+    const needsHumanApproval = action === "approve" && result.status !== "accepted";
+    process.stdout.write(`${JSON.stringify(needsHumanApproval ? { ...reference, operatorAction: "open-approval-link" } : result)}\n`);
+    return needsHumanApproval ? 1 : 0;
+  }
   if (action === "session") {
     if (args.length !== 1 || !values.repo?.length || !fields("repo")) throw new Error("usage: plan session --repo OWNER/REPO");
     const session = await callLocalPlans(gallivantHome(), { op: "session", repositories: values.repo });

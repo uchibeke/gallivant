@@ -118,6 +118,48 @@ anchors also require the scoped cross-company grant. When a mount configures
 this ingress, local intake and flat external histories remain on their original
 local or authorized service surfaces.
 
+### Plan approval links and tool hosts
+
+The standalone and mounted Plans views open `/plans?approval=REQUEST_ID` using
+the current authenticated operator. A copied URL contains the request locator.
+Keep host authentication in front of the full mount, including
+`GET /api/plan/approval`, `GET /api/artifact` and `POST /api/plan/control`.
+
+A trusted operator tool host can resolve one request with
+`GET /api/plan/approval?approval=REQUEST_ID`, show the revision and scope, and
+record explicit operator confirmation for `approve-plan` and that exact
+request and revision. In the process that owns the authenticated ingress,
+call `recordPlanApprovalConsent(scopedContext, requestId, revision)` from
+`lib/dependency_plan_admission.mjs` after verifying the host's confirmation
+event. The scoped context uses the request's current bound `planAuthority`.
+Keep the returned capability in the host process. It expires within two
+minutes, sooner if the operator proof or request expires.
+
+The host can submit this JSON to the existing loopback control endpoint using
+the standard session, Origin and CSRF checks. Bind
+`planApprovalConsentForRequest(req, intent)` in the server context so it can
+return the opaque capability for a verified host action. The intent contains
+`action: "approve-plan"`, `requestId` and `revision`. An in-process tool
+adapter can call `planControl(scopedContext, command, { consent, base })` with
+the same command and the mount prefix it serves.
+
+```json
+{
+  "action": "queue",
+  "stage": "approve-tool",
+  "requestId": "REQUEST_ID",
+  "approve": "REVISION"
+}
+```
+
+The host returns the receipt and view URL to the assistant. The HTTP payload,
+CLI arguments and conversation can identify the requested action. The host's
+authenticated confirmation event supplies consent. Generic shell, MCP and
+chat sessions need that host integration to submit approval. Without it, send
+the operator to the browser approval link.
+
+### Workspace connection
+
 Connection failures retain the last snapshot with stale/disconnected feedback.
 Observation age is separate from the page refresh time and saved productive
 activity. Refresh successfully after a disconnection before confirming a plan or chain

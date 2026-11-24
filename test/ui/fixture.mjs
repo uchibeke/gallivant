@@ -10,13 +10,13 @@ export const TASK = "acme/atlas/search-index";
 export const RUN = "2026-09-24T14-00-00-000-fix";
 export const MALICIOUS = '<img src=x onerror="window.injected=true">';
 
-export async function fixture({ runtime = new URL("../../", import.meta.url), empty = false, hostile = false, live = false } = {}) {
+export async function fixture({ runtime = new URL("../../", import.meta.url), empty = false, hostile = false, live = false, temporaryParent = tmpdir() } = {}) {
   if (typeof runtime === "string") runtime = pathToFileURL(`${runtime}/`);
   const [transport, stateModule, runnerModule, configModule] = await Promise.all([
     import(new URL("lib/commands/serve.mjs", runtime)), import(new URL("lib/state.mjs", runtime)),
     import(new URL("lib/run.mjs", runtime)), import(new URL("lib/config.mjs", runtime)),
   ]);
-  const home = mkdtempSync(join(tmpdir(), "workspace-ui-"));
+  const home = mkdtempSync(join(temporaryParent, "workspace-ui-"));
   const { makeState, newEntry, idSlug, STATES } = stateModule;
   const state = makeState(home);
   const ctx = {

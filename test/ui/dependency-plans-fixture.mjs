@@ -23,8 +23,8 @@ export const manifest = (name, nodes) => ({ version: 1, name, repositories: { "r
 export const encode = (value, format = "json") => ({ format, text: format === "yaml" ? stringify(value) : JSON.stringify(value) });
 const taskId = slug => `${REPO}/${slug}`;
 
-export async function planFixture(t, { limit = 2 } = {}) {
-  const ui = await fixture({ empty: true });
+export async function planFixture(t, { limit = 2, temporaryParent } = {}) {
+  const ui = await fixture({ empty: true, temporaryParent });
   t.after(() => ui.close());
   const { ctx, state } = ui, clock = makeClock(NOW), home = canonicalPath(ui.home);
   const inputs = join(home, "approved-inputs"), worktrees = join(home, "worktrees");

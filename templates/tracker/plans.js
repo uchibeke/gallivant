@@ -252,7 +252,9 @@ function renderPlanReview(review, data) {
   facts(identity, [
     ['Exact reviewed revision', data.revision], ['Request identity', data.requestId],
     ...(data.instanceId ? [['Plan instance', data.instanceId], ['Approval revision', data.approvalRevision]] : []),
+    ...(data.expiresAt ? [['Review expires', data.expiresAt]] : []),
   ]);
+  identity.open = Boolean(data.expiresAt);
   if (scope?.future) {
     review.append(planElement('p', scope.group ? `Group ${scope.group}` : 'Whole plan'));
     entries(review, 'Affected future tasks', scope.future, id => id).open = true;
@@ -275,7 +277,10 @@ function renderPlanReview(review, data) {
   if (!proposal) { review.append(identity); return; }
   review.prepend(planElement('h3', proposal.name));
   const { parallel, resources } = proposal;
-  entries(review, 'Repositories and approved bases', proposal.repositories, r => `${r.repository} @ ${r.base} · ${r.host} · review ${r.review}`).open = true;
+  entries(review, 'Repositories and approved bases', proposal.repositories, r =>
+    `${r.repository} @ ${r.base} · ${r.host} · review ${r.review}${r.reviewRoute ? ` via ${r.reviewRoute}` : ''}`).open = true;
+  entries(review, 'Recorded base commits and required checks', proposal.repositories,
+    r => `${r.repository} @ ${r.base} · ${r.baseCommit} · ${r.requiredChecks.join(', ') || 'No named checks configured'}`);
   entries(review, 'Recorded blockers', proposal.blockers, blocker => blocker).open = true;
   facts(review, [
     ['Dependency target', 'Integrated into approved base with a qualified receipt'],
@@ -289,6 +294,7 @@ function renderPlanReview(review, data) {
   entries(review, 'Input hashes', proposal.sources, file => `${file.path} · ${file.digest}`);
   entries(review, 'Approved base-file hashes', proposal.tasks.flatMap(task => task.files.map(file => ({ ...file, id: task.id }))),
     file => `${file.id} · ${file.path} · input ${file.digest} · base ${file.baseDigest ?? 'absent'}`);
+  entries(review, 'Tasks and anchors in dependency order', proposal.order, id => id);
   entries(review, 'Dependency edges', proposal.edges, edge => `${edge.from} → ${edge.to}`);
   entries(review, 'Group boundaries', proposal.groups, group =>
     `${group.id} · ${group.mode} · entries ${group.entries.join(', ')} · exits ${group.exits.join(', ')}`);
@@ -297,6 +303,96 @@ function renderPlanReview(review, data) {
   facts(identity, [['Graph digest', proposal.graphDigest]]);
   review.append(identity);
 }
+
+(() => {
+  const root = document.querySelector?.('[data-plan-approval]');
+  if (!root) return;
+  const $ = id => document.getElementById('approval-' + id);
+  const requestId = root.dataset.planApproval, submit = $('submit'), proposal = $('proposal');
+  const refresh = $('refresh'), plan = $('plan'), signIn = $('sign-in');
+  const feedback = trackerFeedback($('status')), lifecycle = trackerLifecycle();
+  const href = `${BASE}/api/plan/approval?approval=${encodeURIComponent(requestId)}`;
+  const messages = {
+    pending: 'Pending approval. Review the files and scope before approving.',
+    accepted: 'Plan approved. The admission receipt is saved.',
+    stale: 'This approval request is stale. Create a new review of the current plan.',
+    expired: 'This approval request expired. Create a new review.',
+    denied: 'Approval denied for this repository scope.',
+    unavailable: 'Approval request unavailable. Check the link and your operator access.',
+  };
+  let revision, ready = false, busy = false, submitting = false;
+  const setBusy = value => {
+    busy = value;
+    submit.disabled = busy || !ready;
+    submit.setAttribute('aria-busy', String(busy));
+    refresh.disabled = busy;
+  };
+  function display(data, { fromRead = false } = {}) {
+    if (data.requestId !== requestId || !Object.hasOwn(messages, data.status) ||
+        (revision && data.revision && revision !== data.revision)) throw new Error('Approval identity changed.');
+    revision ??= data.revision;
+    if (fromRead) {
+      if (data.proposal) renderPlanReview(proposal, data);
+      else proposal.replaceChildren();
+    }
+    if (data.status === 'accepted') {
+      const receipt = data.receipt;
+      if (receipt?.requestId !== requestId || receipt.approvalDigest !== revision ||
+          data.planLink !== `${BASE}/plans?plan=${encodeURIComponent(receipt.instanceId)}`) throw new Error('Receipt unavailable.');
+      plan.href = data.planLink;
+    }
+    ready = data.status === 'pending' && !!root.dataset.token && /^[a-f0-9]{64}$/.test(data.revision || '') && !!data.proposal;
+    submit.hidden = !ready;
+    plan.hidden = data.status !== 'accepted';
+    refresh.hidden = data.status !== 'unavailable' && data.status !== 'denied';
+    if (signIn) signIn.hidden = data.status !== 'unavailable';
+    feedback.show(messages[data.status], { state: data.status === 'accepted' ? 'success' : data.status === 'pending' ? 'idle' : 'error' });
+  }
+  async function read() {
+    if (!requestId) { display({ requestId, status: 'unavailable' }, { fromRead: true }); return; }
+    const active = lifecycle.guard();
+    setBusy(true);
+    try {
+      const data = await lifecycle.read(href, messages.unavailable);
+      if (active()) display(data, { fromRead: true });
+    } catch (error) {
+      if (!active()) return;
+      if ([403, 404].includes(error.status)) display({ requestId, status: 'unavailable' }, { fromRead: true });
+      else {
+        ready = false;
+        refresh.hidden = false;
+        feedback.show('The saved request could not be checked. Try again to verify its current state.', { state: 'error' });
+      }
+    } finally { if (active()) setBusy(false); }
+  }
+  refresh.addEventListener('click', () => { if (!busy) read(); });
+  submit.addEventListener('click', async () => {
+    if (busy || !ready) return;
+    ready = false;
+    submitting = true;
+    setBusy(true);
+    $('status').tabIndex = -1;
+    $('status').focus({ preventScroll: true });
+    feedback.show('Submitting plan approval…', { pending: true });
+    try {
+      const data = await trackerControlPost(`${BASE}/api/plan/control`,
+        { action: 'queue', stage: 'approve', requestId, approve: revision }, root.dataset.token, 33000);
+      if (await lifecycle.whenActive()) {
+        display(data);
+        plan.focus({ preventScroll: true });
+      }
+    } catch {
+      if (await lifecycle.whenActive()) {
+        feedback.show('Checking whether the approval was saved…', { pending: true });
+        await read();
+      }
+    } finally { submitting = false; setBusy(false); }
+  });
+  lifecycle.onResume(() => { if (!submitting) read(); });
+  read().then(() => {
+    if (document.activeElement === document.body) $('heading').focus({ preventScroll: true });
+  });
+})();
 
 function trackerPlanControls(root, lifecycle, refresh) {
   const $ = id => document.getElementById(id);
@@ -346,22 +442,12 @@ function trackerPlanControls(root, lifecycle, refresh) {
   }
   const request = (stage, command) => trackerControlPost(`${BASE}/api/plan/control`, { workspace: true, ...command, stage }, root.dataset.token, 33000);
   function receipt(data, command) {
-    if (data?.requestId !== command.requestId || !data.instanceId) return false;
-    return command.action === 'queue' ? ['active', 'observation-only'].includes(data.status) && data.approvalDigest === command.approve
-      : data.status === 'applied' && data.action === command.action && data.instanceId === command.plan;
+    return data?.requestId === command.requestId && data.status === 'applied' &&
+      data.action === command.action && data.instanceId === command.plan;
   }
-  function accepted(data, command) {
+  function accepted() {
     unresolved = null;
-    const queue = command.action === 'queue';
-    feedback.show(queue ? data.status === 'active' ? 'Plan accepted for coordinator dispatch.' : 'Observation-only plan saved.'
-      : 'Reviewed future dispatch change applied.', { state: 'success' });
-    if (queue) {
-      const url = new URL(location.href);
-      url.searchParams.set('plan', data.instanceId);
-      for (const key of ['node', 'mo', 'po', 'dp', 'milestone']) url.searchParams.delete(key);
-      const link = planElement('a', 'Open saved plan', { href: url.pathname + url.search, class: 'plan-receipt-link' });
-      review.append(link);
-    }
+    feedback.show('Reviewed future dispatch change applied.', { state: 'success' });
   }
   async function reconcile() {
     const pending = unresolved;
@@ -369,7 +455,7 @@ function trackerPlanControls(root, lifecycle, refresh) {
     try {
       const data = await request('reconcile', pending.command);
       if (!await lifecycle.whenActive()) return;
-      if (receipt(data, pending.command)) { accepted(data, pending.command); return; }
+      if (receipt(data, pending.command)) { accepted(); return; }
       if (data.status !== 'unrecorded' || data.requestId !== pending.command.requestId || data.action !== pending.command.action) {
         throw new Error('Receipt identity unavailable');
       }
@@ -389,6 +475,7 @@ function trackerPlanControls(root, lifecycle, refresh) {
     if (busy || stale || unresolved || dialog.open || !supportsReview) return;
     trigger = button; approval = null; invalidated = false;
     const command = { ...input, requestId: crypto.randomUUID() };
+    submit.textContent = input.action === 'queue' ? 'Create approval request' : 'Confirm reviewed action';
     $('plan-confirm-title').textContent = input.action === 'queue' ? 'Review plan proposal' : 'Review plan action';
     review.replaceChildren(); setBusy(true);
     feedback.show('Reviewing the requested scope…', { pending: true });
@@ -397,10 +484,12 @@ function trackerPlanControls(root, lifecycle, refresh) {
       const result = await request('review', command);
       if (!await lifecycle.whenActive()) return;
       if (result.status !== 'review' || result.requestId !== command.requestId || result.action !== command.action ||
-        !/^[a-f0-9]{64}$/.test(result.revision || '') || command.plan && result.instanceId !== command.plan) throw new Error('The review response identity could not be verified.');
+        !/^[a-f0-9]{64}$/.test(result.revision || '') || command.plan && result.instanceId !== command.plan ||
+        command.action === 'queue' && !/^[a-z0-9]{8,12}-[a-f0-9-]{36}$/.test(result.saveRequestId || '')) throw new Error('The review response identity could not be verified.');
       renderPlanReview(review, result);
       approval = { result, command };
-      feedback.show(result.proposal?.canConfirm === false ? 'This proposal requires a queue grant.' : 'Review ready. Confirm to accept this exact scope.');
+      feedback.show(result.proposal?.canConfirm === false ? 'This proposal requires a queue grant.' :
+        command.action === 'queue' ? 'Review ready. Save a link to this exact proposal.' : 'Review ready. Confirm to accept this exact scope.');
       sync();
     } catch (error) {
       if (await lifecycle.whenActive()) feedback.show(error.refused ? error.message : 'Review unavailable. Check the request and preview again.', { state: 'error' });
@@ -415,13 +504,31 @@ function trackerPlanControls(root, lifecycle, refresh) {
   submit.addEventListener('click', async () => {
     if (submit.disabled || !approval) return;
     const command = { ...approval.command, approve: approval.result.revision };
+    if (command.action === 'queue') {
+      command.requestId = approval.result.saveRequestId;
+      setBusy(true);
+      feedback.show('Saving the approval request…', { pending: true });
+      try {
+        const data = await request('save', command);
+        if (!await lifecycle.whenActive()) return;
+        const link = `${BASE}/plans?approval=${encodeURIComponent(command.requestId)}`;
+        if (data.approvalLink !== link || data.revision !== command.approve) throw new Error('Approval request unavailable.');
+        invalidated = true;
+        location.assign(link);
+      } catch (error) {
+        if (!await lifecycle.whenActive()) return;
+        invalidated = error.code === 'PLAN_STALE';
+        feedback.show(error.refused ? error.message : 'The approval link could not be verified. Try saving the same request again.', { state: 'error' });
+      } finally { setBusy(false); }
+      return;
+    }
     approval = null; setBusy(true);
     feedback.show('Confirming the reviewed scope…', { pending: true });
     try {
       const data = await request('confirm', command);
       if (!await lifecycle.whenActive()) return;
       if (!receipt(data, command)) throw new Error('Receipt identity unconfirmed');
-      accepted(data, command);
+      accepted();
     } catch (error) {
       if (!await lifecycle.whenActive()) return;
       unresolved = { command, refusal: error.refused ? error : null };

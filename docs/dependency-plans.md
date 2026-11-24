@@ -231,6 +231,28 @@ ownership and request receipt together. Supply `--request-id ID` to name the
 request. When omitted, the approved digest is the request ID. Repeat the same
 digest and request ID after a lost response to retrieve the saved result.
 
+## Saved approval requests
+
+Use `plan request FILE --approve REVISION --request-id REQUEST_ID` with
+`approvalDigest` and `requestId` from the qualified preview and the same input
+options. The CLI and **Create approval request** save a pending review and
+return its Plans link. The request is eligible for at most 30 minutes and
+respects any earlier local preview deadline. The registry bounds pending
+requests and retained bytes. Old review snapshots are pruned on subsequent
+saves. The original admission receipt remains available through the request
+link when the operator retains access.
+
+In the protected browser API, send `action: "queue"` with `stage: "review"`
+and a preview correlation ID. To save the review, send `stage: "save"`,
+the returned `saveRequestId` as `requestId`, the returned `revision` as
+`approve`, and the original `file` or `manifest`. Read its status and
+allowed proposal with `GET /api/plan/approval?approval=REQUEST_ID`. The
+operator UI submits `stage: "approve"` with the request ID and revision.
+The server retrieves the proposal and input bindings from the saved request.
+Repeat the exact request and revision for the original receipt. A stale
+request directs the operator to create a new review.
+[Tool host integration](app.md#plan-approval-links-and-tool-hosts)
+
 ## Review and confirm plan controls
 
 Review a plan or group action with a new request ID and repeat the command

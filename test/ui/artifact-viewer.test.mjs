@@ -163,7 +163,9 @@ test("intake, approved Plans and plan review all open saved inputs through the s
   await viewer(page).locator(".artifact-origin").filter({ hasText: "Reviewed plan preview" }).waitFor();
   assert.equal(await viewer(page).getByRole("region", { name: "Text preview" }).textContent(), input.text);
   await close(page).click();
-  await review.getByRole("button", { name: "Confirm reviewed action" }).waitFor();
+  const create = review.getByRole("button", { name: "Create approval request", exact: true });
+  await create.waitFor();
+  assert.equal(await create.isEnabled(), true);
 });
 
 test("long files keep the toolbar reachable through touch, narrow reflow, zoom and both themes", { timeout: 50_000 }, async t => {
