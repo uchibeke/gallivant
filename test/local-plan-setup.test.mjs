@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, fstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,11 +10,12 @@ import { test } from "node:test";
 import { mount, serve } from "../lib/commands/serve.mjs";
 import { queueChain } from "../lib/chains.mjs";
 import { makeExecution } from "../lib/execution.mjs";
-import { localWorkerCommand, planSocketPath } from "../lib/local_plan_boundary.mjs";
+import { grantPlanCheckout, localWorkerCommand, planSocketPath } from "../lib/local_plan_boundary.mjs";
 import { callLocalPlans, makeLocalPlans, setupLocalPlans } from "../lib/local_plan_service.mjs";
 import { planOperator } from "../lib/operator_intent.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
+import { writeRepositoryText } from "../lib/repository_files.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { makeState } from "../lib/state.mjs";
 import { CONFIG, GOOD_PRD, fakeGh, harnessBin, silentLog } from "./helpers.mjs";
@@ -23,6 +24,42 @@ const REPO = "acme/widget", OTHER = "acme/other";
 const cli = fileURLToPath(new URL("../bin/gallivant.mjs", import.meta.url));
 const exec = promisify(execFile);
 const write = (path, bytes) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, bytes); };
+
+test("checkout overlays prepare named access for new files and parent directories on retry", t => {
+  const root = mkdtempSync(join(realpathSync(tmpdir()), "lp-overlay-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const prepared = [];
+  let fail = false;
+  const git = makeGit({ worktreeBoundary: { overlayAccess: checkout => {
+    assert.equal(checkout, root);
+    return (fd, file) => {
+      const item = fstatSync(fd);
+      assert.equal(item.uid, process.getuid());
+      if (item.isDirectory()) prepared.push(file);
+      else {
+        assert.ok(item.isFile());
+        assert.equal(item.nlink, 1);
+        if (fail) throw new Error("fixture ACL write failed");
+        prepared.push(readFileSync(file, "utf8"));
+      }
+    };
+  } } });
+  const rel = "new/nested/source.md", options = git.overlayOptions?.(root);
+  const parent = join(root, "new", "nested");
+  // An older coordinator may already have created the first parent with a
+  // restrictive mask. Both it and the missing nested directory need access.
+  mkdirSync(join(root, "new"), { mode: 0o755 });
+  writeRepositoryText(root, rel, "approved", options);
+  assert.deepEqual(prepared, [join(root, "new"), parent, "approved"]);
+  fail = true;
+  assert.throws(() => writeRepositoryText(root, rel, "replacement", options), /ACL write failed/);
+  assert.deepEqual(readdirSync(parent), ["source.md"]);
+  assert.equal(readFileSync(join(root, rel), "utf8"), "approved");
+  fail = false;
+  writeRepositoryText(root, rel, "replacement", options);
+  assert.equal(readFileSync(join(root, rel), "utf8"), "replacement");
+  assert.equal(prepared.at(-1), "replacement");
+});
 
 function fixture(t) {
   // Keep the Unix pathname short on both production platforms.
@@ -84,6 +121,34 @@ function fixture(t) {
   return { home, checkout, configFile, raw, calls, boundary, context, setup, service, installedCli, manifest, account,
     changeArtifact: value => { fingerprint = value; }, refuseProbe: value => { failure = value; }, expire: ms => { time += ms; } };
 }
+
+test("Linux checkout overlays restore the worker's effective POSIX ACL", {
+  skip: process.platform !== "linux" || !existsSync("/usr/bin/setfacl") || !existsSync("/usr/bin/getfacl"),
+}, async t => {
+  const f = fixture(t);
+  await f.setup({ worker: "plan-worker" });
+  const { worktrees } = f.raw, checkout = join(worktrees, "acme", "widget", "overlay");
+  mkdirSync(dirname(checkout), { recursive: true, mode: 0o755 });
+  await grantPlanCheckout({ worktrees }, f.account, checkout);
+  const git = makeGit({ worktreeBoundary: makeLocalPlans(f.context(), f.boundary).gitBoundary });
+  const effective = rel => {
+    const acl = execFileSync("/usr/bin/getfacl", ["-acn", "--", join(checkout, rel)], { encoding: "utf8", timeout: 4000 });
+    const entry = acl.split("\n").find(line => line.startsWith(`user:${f.account.uid}:`));
+    assert.ok(entry, `no worker ACL on ${rel}`);
+    return entry.split("#effective:")[1]?.trim() ?? entry.split(":")[2].trim();
+  };
+  writeRepositoryText(checkout, "old/source.md", "before enrollment fix");
+  assert.equal(effective("old"), "r-x");
+  assert.equal(effective("old/source.md"), "r--");
+  const options = git.overlayOptions(checkout);
+  writeRepositoryText(checkout, "old/source.md", "restored", options);
+  writeRepositoryText(checkout, "old/new/tool.sh", "#!/bin/sh\n", { ...options, mode: 0o755 });
+  assert.equal(effective("old"), "rwx");
+  assert.equal(effective("old/source.md"), "rw-");
+  assert.equal(effective("old/new"), "rwx");
+  assert.equal(effective("old/new/tool.sh"), "rwx");
+  assert.equal(git.overlayOptions(f.home).grantAccess, undefined);
+});
 
 test("setup check does no writes and enrollment preserves the home, linear queue, credential and author ceilings", async t => {
   const f = fixture(t), ctx = f.context();
