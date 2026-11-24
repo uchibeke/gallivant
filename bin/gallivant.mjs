@@ -162,25 +162,26 @@ async function planCommand(args, values) {
     const rawConfig = privatePlanConfig(home);
     const ctx = makeContext({ home, readOnly: true, rawConfig });
     const report = await setupLocalPlans(ctx, { check: values.check, worker: values.worker }, { tracker: () => readTracker(home) });
-    if (values.json) console.log(JSON.stringify(report));
-    else {
-      console.log(`Host: ${report.host.join(", ")} · ${report.platform}/${report.architecture}`);
-      console.log(`Worker: ${report.worker.route} · ${report.worker.executable ?? "unconfigured"} · ${report.worker.account ?? "no OS account selected"}`);
-      console.log(`Isolation: ${report.isolation.status} (${report.isolation.launcher}) · model access: ${report.worker.modelAccess}`);
-      console.log(`Approval access: ${report.approvalAccess}`);
-      console.log(`Graph capacity: ${report.capacity.graph_authors} total, ${report.capacity.graph_per_repository} per repository`);
-      if (report.prerequisite || report.next) console.log(report.prerequisite || report.next);
-    }
+    const next = report.prerequisite || report.next;
+    const output = values.json ? JSON.stringify(report) : [
+      `Host: ${report.host.join(", ")} · ${report.platform}/${report.architecture}`,
+      `Worker: ${report.worker.route} · ${report.worker.executable ?? "unconfigured"} · ${report.worker.account ?? "no OS account selected"}`,
+      `Isolation: ${report.isolation.status} (${report.isolation.launcher}) · model access: ${report.worker.modelAccess}`,
+      `Approval access: ${report.approvalAccess}`,
+      `Graph capacity: ${report.capacity.graph_authors} total, ${report.capacity.graph_per_repository} per repository`,
+      ...(next ? [next] : []),
+    ].join("\n");
+    process.stdout.write(`${output}\n`);
     return report.prerequisite && (values.check || report.approvalAccess !== "enrolled") ? 1 : 0;
   }
   if (action === "validate" && args.length === 2 && fields("dir", "checkout")) {
     const { compileDependencyPlan } = await import("../lib/dependency_plan.mjs");
     const preview = compileDependencyPlan(target, compileOptions);
-    if (values.json) console.log(JSON.stringify(preview));
+    if (values.json) process.stdout.write(`${JSON.stringify(preview)}\n`);
     else {
       const { graph, graphDigest, approvalDigest } = preview;
       const tasks = graph.nodes.filter(node => node.type === "task").length;
-      console.log(`${graph.name}: ${tasks} tasks, ${graph.nodes.length - tasks} unresolved anchors, ${graph.edges.length} dependencies\ngraphDigest ${graphDigest}\napprovalDigest ${approvalDigest}`);
+      process.stdout.write(`${graph.name}: ${tasks} tasks, ${graph.nodes.length - tasks} unresolved anchors, ${graph.edges.length} dependencies\ngraphDigest ${graphDigest}\napprovalDigest ${approvalDigest}\n`);
     }
     return 0;
   }
@@ -188,7 +189,8 @@ async function planCommand(args, values) {
   const { callLocalPlans } = await import("../lib/local_plan_service.mjs");
   if (action === "session") {
     if (args.length !== 1 || !values.repo?.length || !fields("repo")) throw new Error("usage: plan session --repo OWNER/REPO");
-    console.log(JSON.stringify(await callLocalPlans(gallivantHome(), { op: "session", repositories: values.repo })));
+    const session = await callLocalPlans(gallivantHome(), { op: "session", repositories: values.repo });
+    process.stdout.write(`${JSON.stringify(session)}\n`);
     return 0;
   }
   if (action !== "queue" && PLAN_CONTROL_ACTIONS.includes(action)) {
@@ -203,7 +205,8 @@ async function planCommand(args, values) {
       ...(values.node !== undefined ? { node: values.node } : {}),
       ...(edit ? { input: { file: args[2], options: compileOptions } } : {}) };
     const ctx = makeContext({ readOnly: true });
-    console.log(JSON.stringify(ctx.localPlans.enabled ? await callLocalPlans(ctx.home, { op: "control", ...command }) : await planControl(ctx, command)));
+    const result = ctx.localPlans.enabled ? await callLocalPlans(ctx.home, { op: "control", ...command }) : await planControl(ctx, command);
+    process.stdout.write(`${JSON.stringify(result)}\n`);
     return 0;
   }
   if (["validate", "preview", "queue"].includes(action) && (args.length !== 2 || !fields("dir", "checkout", ...(action === "queue" ? ["approve", "request-id"] : []))) ||
@@ -228,14 +231,15 @@ async function planCommand(args, values) {
       result = await previewPlan(ctx, input);
       result.observation.localSetup = error.message;
     }
-    console.log(JSON.stringify(action === "queue" ? { ...result, planLink: `/plans?plan=${encodeURIComponent(result.instanceId)}` } : result));
+    const report = action === "queue" ? { ...result, planLink: `/plans?plan=${encodeURIComponent(result.instanceId)}` } : result;
+    process.stdout.write(`${JSON.stringify(report)}\n`);
     return 0;
   }
   const result = action === "preview" ? await previewPlan(ctx, input)
     : action === "queue" ? await queuePlan(ctx, input, { approve: values.approve, requestId: values["request-id"] })
     : action === "migration" ? migratePlans(ctx, values.approve)
     : inspectPlan(ctx, action === "inspect" ? target : action);
-  console.log(JSON.stringify(result));
+  process.stdout.write(`${JSON.stringify(result)}\n`);
   return 0;
 }
 
@@ -265,7 +269,7 @@ async function dispatch(argv) {
     const { callLocalPlans } = await import("../lib/local_plan_service.mjs");
     const report = ctx.localPlans.enabled ? await callLocalPlans(ctx.home, approve === undefined ? { op: "preview", ...input }
       : { op: "control", action: "queue", stage: "confirm", input, approve, requestId }) : await queuePlan(ctx, input, { approve, requestId });
-    console.log(JSON.stringify(report));
+    process.stdout.write(`${JSON.stringify(report)}\n`);
     return 0;
   }
   if (values.approve !== undefined) throw new Error("--approve is available only for protected plan commands and future chain references");

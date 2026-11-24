@@ -291,7 +291,13 @@ test("standalone and mounted trackers require a scoped session issued by the loc
   t.after(async () => {
     for (const s of [standalone, server]) { s.closeAllConnections(); await new Promise(resolve => s.close(resolve)); }
   });
-  const session = async repo => (await callLocalPlans(f.home, { op: "session", repositories: [repo] })).session;
+  const session = async repo => {
+    const { stdout } = await f.installedCli("session", "--repo", repo);
+    const report = JSON.parse(stdout);
+    assert.deepEqual(report.repositories, [repo]);
+    assert.equal(stdout, `${JSON.stringify(report)}\n`);
+    return report.session;
+  };
   const valid = await session(REPO), outside = await session(OTHER);
   for (const [instance, prefix] of [[server, "/work"], [standalone, ""]]) {
     const origin = `http://127.0.0.1:${instance.address().port}`, url = origin + prefix;
