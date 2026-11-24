@@ -1,10 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { makeRunner, runProcesses } from "../lib/run.mjs";
 import { makeExecution } from "../lib/execution.mjs";
+import { processBirth } from "../lib/daemon.mjs";
+import { signalPlanWorker } from "../lib/local_plan_boundary.mjs";
 import { tempHome } from "./helpers.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
@@ -95,6 +100,65 @@ test("a restarted daemon can finish a verified cancellation hours later", () => 
   assert.deepEqual(signals, [], "reads never signal");
   runner.kill(id);
   assert.deepEqual(signals, [[102, "SIGKILL"]]);
+});
+
+test("an isolated worker and detached tool receive the saved kill fallback after restart", () => {
+  const root = tempHome(), id = "isolated", workerUid = process.getuid() + 1;
+  const leader = { pid: 100, group: 100, started: "Wed Sep 30 20:00:00 2026" };
+  const worker = { pid: 102, group: 101, started: "Wed Sep 30 20:00:01 2026" };
+  const tool = { pid: 103, group: 103, started: "Wed Sep 30 20:00:02 2026" };
+  const command = { cmd: "/usr/bin/sudo", args: ["-n", "-H", "-u", `#${workerUid}`, "--preserve-env=PATH,LC_ALL,LANG", "--", "/fixture/worker"] };
+  mkdirSync(join(root, id));
+  writeFileSync(join(root, "latest-run"), id);
+  writeJsonAtomic(join(root, id, "job.json"), { id, pid: leader.pid, bin: command.cmd, leaderOnly: true,
+    birth: leader.started, exit: 137, killed: true, killAfter: 1, stopMembers: [leader, worker, tool] });
+  writeJsonAtomic(join(root, id, "cmd.json"), command);
+  let members = [worker, tool], refused = true;
+  const delegated = [];
+  const runner = makeRunner(root, { clock: { now: () => 6000 }, processes: () => members,
+    exists: pid => members.some(member => member.pid === pid), birth: pid => members.find(member => member.pid === pid)?.started,
+    signal: () => assert.fail("the operator must not signal another account's processes"),
+    signalWorker: (recorded, targets, signal) => signalPlanWorker(recorded, targets, signal, (bin, args, options) => {
+      assert.deepEqual(recorded, command);
+      assert.equal(bin, "/usr/bin/sudo");
+      assert.deepEqual(args.slice(0, 4), ["-n", "-H", "-u", `#${workerUid}`]);
+      assert.deepEqual(args.slice(5), ["--", process.execPath, fileURLToPath(new URL("../bin/local-plan-worker-signal.mjs", import.meta.url)), String(workerUid), signal]);
+      assert.deepEqual(options.env, { PATH: "/usr/bin:/bin", LC_ALL: "C", LANG: "C" });
+      assert.deepEqual(JSON.parse(options.input), [worker, tool].map(({ pid, started }) => ({ pid, started })));
+      if (refused) throw new Error("fixture worker signal refused");
+      const pids = targets.map(member => member.pid);
+      delegated.push([pids, signal]);
+      members = [];
+      return JSON.stringify(pids);
+    }) });
+  assert.equal(runner.current().running, true);
+  assert.deepEqual(delegated, [], "observing a run does not send signals");
+  assert.throws(() => runner.kill(id), { code: "RUN_STOP_UNVERIFIED" });
+  assert.equal(runner.current().running, true, "a failed signal request cannot settle the run");
+  refused = false;
+  runner.kill(id);
+  assert.deepEqual(delegated, [[[worker.pid, tool.pid], "SIGKILL"]]);
+  assert.equal(runner.current().running, false);
+  assert.equal(runner.cleanupSettled(id), true);
+});
+
+test("the worker helper rechecks birth and delivers SIGKILL to a TERM-resistant process", { skip: process.getuid() === 0 }, async t => {
+  const child = spawn(process.execPath, ["-e", "process.on('SIGTERM', () => {}); process.send('ready'); setInterval(() => {}, 1000);"],
+    { stdio: ["ignore", "ignore", "ignore", "ipc"] });
+  const exited = once(child, "exit");
+  t.after(async () => { child.kill("SIGKILL"); await exited; });
+  await once(child, "message", { signal: AbortSignal.timeout(5000) });
+  const started = processBirth(child.pid);
+  assert.ok(started);
+  // This node process already runs as the fixture's UID. The separate sudo
+  // transport fixture above checks how the coordinator selects the worker.
+  const helper = fileURLToPath(new URL("../bin/local-plan-worker-signal.mjs", import.meta.url));
+  const send = (signal, identity = started) => JSON.parse(execFileSync(process.execPath, [helper, String(process.getuid()), signal],
+    { input: JSON.stringify([{ pid: child.pid, started: identity }]), timeout: 5000, encoding: "utf8" }));
+  assert.deepEqual(send("SIGKILL", "mismatched birth"), []);
+  assert.deepEqual(send("SIGTERM"), [child.pid]);
+  assert.deepEqual(send("SIGKILL"), [child.pid]);
+  assert.deepEqual(await exited, [null, "SIGKILL"]);
 });
 
 test("PID reuse cannot authorize signalling a cancelled group", () => {

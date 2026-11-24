@@ -28,6 +28,7 @@ try {
   for (const path of packedPaths) assert.ok(runtimeFile(path), `shared release allowlist: ${path}`);
   assert.ok(packedPaths.has("docs/dependency-plan-qualification.md"));
   assert.ok(packedPaths.has("bin/local-plan-worker-probe.mjs"));
+  assert.ok(packedPaths.has("bin/local-plan-worker-signal.mjs"));
   for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop", "dependency-plans-desktop", "dependency-plans-review-mobile"])
     assert.ok(packedPaths.has(`docs/ui/previews/${name}.png`), `approved guide asset: ${name}`);
   // Every relative image linked from a shipped guide must exist in the tarball.
