@@ -63,6 +63,14 @@ esac
 `, { mode: 0o700 });
   const env = { ...process.env, HOME: home, GALLIVANT_HOME: ghome, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`, npm_config_cache: cache, NPM_CONFIG_CACHE: cache, FIXTURE_GH_SCOPES: "repo", FIXTURE_SCOPE_ERROR: "0" };
 
+  // An unpacked tarball can print help before npm installs its dependencies.
+  const unpacked = join(root, "unpacked");
+  mkdirSync(unpacked);
+  run("tar", ["-xzf", tarball, "-C", unpacked]);
+  assert.equal(existsSync(join(unpacked, "package", "node_modules", "markdown-it")), false);
+  const unpackedCli = join(unpacked, "package", "bin", "gallivant.mjs");
+  assert.match(run(process.execPath, [unpackedCli, "--help"], { cwd: unpacked, env: { ...env, NODE_PATH: "" } }), /--no-server/);
+
   // The README fast path, word for word except that the package spec is this tarball rather than the registry name, so
   // the revision under test is what runs and not whatever is published. `npx` resolves the `gallivant` bin itself.
   const npxWithEnv = (overrides, cwd, ...args) => spawnSync("npx", ["--yes", `--package=${tarball}`, "gallivant", ...args], { cwd, env: { ...env, ...overrides }, encoding: "utf8", timeout: 300_000 });
