@@ -27,6 +27,8 @@ try {
   const packedPaths = new Set(packed.files.map(f => f.path));
   for (const path of packedPaths) assert.ok(runtimeFile(path), `shared release allowlist: ${path}`);
   assert.ok(packedPaths.has("docs/dependency-plan-qualification.md"));
+  assert.ok(packedPaths.has("bin/local-plan-worker-probe.mjs"));
+  assert.ok(packedPaths.has("bin/local-plan-worker-signal.mjs"));
   for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop", "dependency-plans-desktop", "dependency-plans-review-mobile"])
     assert.ok(packedPaths.has(`docs/ui/previews/${name}.png`), `approved guide asset: ${name}`);
   // Every relative image linked from a shipped guide must exist in the tarball.
@@ -133,10 +135,28 @@ esac
   assert.equal(command("--version").trim(), packed.version);
   assert.match(command("--help"), /--no-server/);
   assert.match(command("--help"), /gallivant init/);
+  const configBeforeSetup = readFileSync(join(ghome, "config.json"));
+  const setup = spawnSync(process.execPath, [cli, "plan", "setup", "--check", "--worker", "missing-plan-fixture-user", "--json"], { cwd: repo, env, encoding: "utf8", timeout: 25_000 });
+  assert.equal(setup.status, 1, setup.stderr);
+  const planSetup = JSON.parse(setup.stdout);
+  assert.deepEqual(planSetup.host, ["github.com"]);
+  assert.equal(planSetup.worker.route, "codex");
+  assert.equal(planSetup.capacity.graph_authors, 0);
+  assert.equal(planSetup.approvalAccess, "unavailable");
+  assert.ok(planSetup.prerequisite);
+  assert.equal(setup.stdout, `${JSON.stringify(planSetup)}\n`);
+  const setupText = spawnSync(process.execPath, [cli, "plan", "setup", "--check", "--worker", "missing-plan-fixture-user"], { cwd: repo, env, encoding: "utf8", timeout: 25_000 });
+  assert.equal(setupText.status, setup.status, setupText.stderr);
+  assert.match(setupText.stdout, /^Host: github\.com · \S+\/\S+\nWorker: codex · /);
+  assert.match(setupText.stdout, /\nIsolation: .+\nApproval access: unavailable\nGraph capacity: 0 total, 0 per repository\n/);
+  assert.ok(setupText.stdout.endsWith(`\n${planSetup.prerequisite}\n`));
+  assert.deepEqual(readFileSync(join(ghome, "config.json")), configBeforeSetup);
+  assert.equal(existsSync(join(ghome, "state.json")), false);
   const example = join(installed, "templates/dependency-plan");
   const validateExample = extension => JSON.parse(command("plan", "validate", `synthetic.${extension}`, "--dir", example, "--json"));
   const graphDigest = validateExample("yaml").graphDigest;
   assert.equal(graphDigest, validateExample("json").graphDigest);
+  assert.match(command("plan", "validate", "synthetic.yaml", "--dir", example), new RegExp(`^synthetic-console: 3 tasks, 1 unresolved anchors, 4 dependencies\\ngraphDigest ${graphDigest}\\napprovalDigest [a-f0-9]{64}\\n$`));
   const api = `const { compileDependencyPlan } = await import("@uchibeke/gallivant/dependency-plans");
     console.log(compileDependencyPlan("synthetic.yaml", { directory: process.argv[1] }).graphDigest);`;
   assert.equal(run(process.execPath, ["--input-type=module", "-e", api, example], { cwd: prefix, env }).trim(), graphDigest);

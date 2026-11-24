@@ -343,14 +343,18 @@ further narrow admission. Active runs retain their original task allowances.
 The reviewer and reconciliation work lanes use their existing independent
 limits and budgets. `execution.concurrency` governs bounded coordinator I/O.
 
-Protected plan operations require an authenticated operator with scoped grants.
+`plan setup` writes the private `local_plan` enrollment and graph ceilings in
+one config replacement. It binds the operator, listed repositories, dedicated
+worker account, worktrees and installed runtime. The coordinator keeps its
+private home and opens `plan.sock` there. Repeated setup keeps the operator
+identity and the worker's separate Codex login. Use the setup command to
+renew qualification after an installation change. [Local account and directory setup](dependency-plans.md#local-install)
+
 For an embedded deployment, the trusted coordinator ingress supplies its
-current principal, grants and exact worker-isolation proof using
-`bindPlanOperator`. The proof must cover the registry, snapshots, operator
-ingress and coordinator control routes for the actual deployment. Configure
-isolation outside the worker with an OS account, container or qualified outer
-sandbox. A standalone probe and file modes for a shared user are insufficient.
-Current standalone author routes leave this gate closed.
+current principal, grants and worker-isolation proof with `bindPlanOperator`.
+The proof covers the exact worker launch, registry, snapshots and privileged
+routes. A mounted tracker on the local coordinator host can use the local
+service for scoped sessions. [Tracker sessions](dependency-plans.md#tracker-sessions)
 
 Start with zero graph ceilings for read-only observation. Admit the exact
 disposable qualification separately from operational plans. Select an existing

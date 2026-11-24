@@ -20,6 +20,120 @@ fragment, and a qualification task with two prerequisites.
 [YAML example](../templates/dependency-plan/synthetic.yaml) ·
 [Group fragment](../templates/dependency-plan/fragments/console.yaml)
 
+## Local install
+
+The local launcher uses a dedicated OS account for Codex. The coordinator and
+tracker use the existing private operator home. The OS identity separates the
+worker from the registry, approval key and Unix socket. Codex retains the
+existing workspace and per-turn approval settings.
+
+1. In a disposable GitHub repository, run `gallivant init --harness codex`.
+   Keep the repository in `repos`. Use the normal host access and review policy
+   from `gallivant doctor`. Keep merge permission and release credentials with
+   their existing owners.
+2. Provision a standard, non-admin worker account such as `gallivant-worker`
+   with a separate login home, no sudo grants and no access to the operator's
+   private files. Use `visudo` to allow the **operator** to run commands as
+   this worker. For an operator named `operator`, the policy is
+   `operator ALL=(gallivant-worker) NOPASSWD:SETENV: ALL`. This permits only
+   that target account. Sign in to the configured Codex executable as the worker
+   using its own account and profile. The operator's Codex and host credentials
+   stay in place. Node, Git, the configured Codex executable and the package
+   must be reachable by the worker from an installation it cannot modify.
+3. Keep the operator's home for this application at mode `0700` and its
+   `config.json` at `0600`. Use a canonical `worktrees` path owned by the operator
+   outside that home. Give the worker traversal on the path to worktrees
+   (for example, mode `0711` on the operator-owned worktrees directory). Only
+   the per-task checkout receives a dual-user ACL. Install `setfacl` from the
+   `acl` package on Linux. macOS uses the system `chmod` ACL support.
+4. Settle existing unconfined author processes before the first enrollment.
+   Use `gallivant down` if the coordinator or standalone tracker is running.
+   The setup report names the first missing prerequisite. Once setup succeeds,
+   start the coordinator in the background with the dashboard closed.
+
+   ```sh
+   gallivant plan setup --check --json
+   gallivant plan setup
+   gallivant start --no-server
+   gallivant plan setup --check --json
+   ```
+
+5. Create four ready Codex briefs with `gallivant new NAME` and
+   `gallivant ready docs/prds/NAME.md`. Give each task a small change in a
+   distinct disposable file. Save `trial.yaml` alongside the repository's
+   `docs` directory, using the registered repository and its approved base.
+
+   ```yaml
+   version: 1
+   name: local-trial
+   repositories:
+     trial: { repository: YOUR-ORG/YOUR-DISPOSABLE-REPO, checkout: ., base: main }
+   nodes:
+     - id: delivery
+       type: group
+       mode: sequence
+       children:
+         - { id: foundation, type: task, repository: trial, prd: docs/prds/foundation.md }
+         - id: checks
+           type: group
+           mode: parallel
+           children:
+             - { id: left, type: task, repository: trial, prd: docs/prds/left.md }
+             - { id: right, type: task, repository: trial, prd: docs/prds/right.md }
+         - { id: join, type: task, repository: trial, prd: docs/prds/join.md }
+   ```
+
+   ```sh
+   gallivant plan preview trial.yaml --json
+   gallivant plan queue trial.yaml --approve DIGEST
+   gallivant plan inspect local-trial --json
+   ```
+
+   Replace `DIGEST` with the reviewed preview's `approvalDigest` before the
+   displayed expiry. The admission includes a stable `/plans?plan=…` path.
+   Merge the reviewed foundation PR into the approved base to release the
+   parallel group. Merge both reviewed branches to release the join. The normal
+   repository rules and maintainer perform those merges.
+
+### Local support matrix
+
+| Host | Launcher and prerequisites | Evidence status |
+| --- | --- | --- |
+| macOS, GitHub, local Codex | `/usr/bin/sudo -n -H -u #UID`, system Git and macOS ACLs. Install outside worker writes and use a separate worker login. | macOS 26.3 (Darwin 25.3.0 arm64) reported Codex CLI 0.169.0. The managed session denied `/usr/bin/sudo` execution. A worker launch and socket denial on that host remain unverified. |
+| Linux, GitHub, local Codex | The same `/usr/bin/sudo` worker contract, system Git and POSIX ACLs with `/usr/bin/setfacl`. Use a non-root operator on a host with separate OS accounts. | Native Linux launcher proof is pending. The development machine had no running Linux Docker engine. |
+
+Routine tests exercise disposable Git checkouts, synthetic host responses and
+the installed command and HTTP paths. Native rollout needs a passing
+`plan setup --check --json` from the operator terminal on each platform. Record
+the platform, architecture, selected executable, worker UID and launch digest.
+With the coordinator and standalone tracker running, record the socket denial
+and the denied unauthenticated mutations. Repeat for the base and mount that
+will actually be used. Separately authorize the disposable live flow to prove
+model access, any installed plugins the deployment requires, Git operations,
+review and exact-session resume. Save the plan and prerequisite merge receipts.
+[Protected native and live qualification](dependency-plan-qualification.md#protected-native-and-live-checks)
+
+Local setup currently requires one configured local Codex route, GitHub HTTPS,
+an unpinned namespace and trustworthy runtime paths. Shared accounts, root
+coordinators, unsupported hosts or author routes, public trackers and older
+mounted trackers stay outside this setup. Existing provider sessions from a
+different login need their original owner. Settle them under that owner before
+enrolling the new worker. If setup fails, run the check again after restoring the
+reported account, path, credential or installed runtime. The preview remains
+available for local input inspection.
+
+### Tracker sessions
+
+With `gallivant serve` running on loopback, open `/plan-session`. In the browser
+prompt, enter `operator` as the username and the session value from
+`gallivant plan session --repo OWNER/REPO` as the password. Repeat `--repo` for
+a plan that spans multiple authorized repositories. For a mounted tracker,
+open the same route under its mount prefix. The session expires after 30 minutes.
+A programmatic client can use the same value as a bearer token.
+Browser review of uploaded plans uses the mount's approved checkout and
+input bindings. Plans queued from the CLI can be followed and controlled
+through either tracker under the same repository grants.
+
 ## Version 1 grammar
 
 A manifest has four fields.
@@ -111,11 +225,11 @@ configured route can still report unverified model access. The preview performs
 bounded reads and leaves the registry and host unchanged.
 
 Use the same file and checkout options for `plan queue FILE --approve DIGEST`.
-Without `--approve`, queue returns the preview. A qualified operator ingress
-checks the exact proposal and saves the approval, snapshots, ownership and
-request receipt together. Supply `--request-id ID` to name the request. When
-omitted, the approved digest is the request ID. Repeat the same digest and
-request ID after a lost response to retrieve the saved result.
+The local preview's `observation.approvalExpiresAt` gives the review deadline,
+at most 15 minutes away. The coordinator saves the exact approval, snapshots,
+ownership and request receipt together. Supply `--request-id ID` to name the
+request. When omitted, the approved digest is the request ID. Repeat the same
+digest and request ID after a lost response to retrieve the saved result.
 
 ## Review and confirm plan controls
 
@@ -230,12 +344,12 @@ observation-only. Linear chains and `--after` keep their command behavior.
 Their saved descriptions compile to the same dependency graph for selection
 and use the shared start and completion owners. [PRD chains](chains.md)
 
-The standalone CLI can validate manifests and resolve previews without saved
-producer links. The supplied local author launch does not qualify an operator
-ingress for graph queue, inspection, migration or future links. A deployment
-must enclose the exact worker launch outside protected state and controls and
-bind its authenticated operator through the coordinator's authority port.
-[Configuration and feature gates](config.md#dependency-plan-admission)
+The coordinator refreshes the worker boundary under each saved operator scope.
+An installation, account or grant change can pause admission and new starts.
+Run `gallivant plan setup --check` for the prerequisite and restore the exact
+enrollment to continue existing approvals. Requalification under a changed
+launcher permits new approvals. Previously accepted execution and integration
+evidence stays in its original ledger. [Configuration and feature gates](config.md#dependency-plan-admission)
 
 ## References and rollback
 
@@ -260,9 +374,12 @@ inspection and verified backups.
 4. Enable authoring and reviewed UI controls through the authenticated mount's
    operator and input bindings. Withdraw those bindings to remove UI authoring.
 
-Set both graph ceilings to zero to disable new graph reservations. The existing
-coordinator continues collecting accepted runs, settling task cancellations and
-closing merged work. Use `recovery drain` to inspect outstanding graph plans,
+Set `dispatch_capacity.graph_authors` and `dispatch_capacity.graph_per_repository`
+to `0` to disable graph admissions and new reservations. Keep the `local_plan`
+enrollment and worker credential profile. Use `gallivant down` and then
+`gallivant start --no-server` to reload the ceilings. The existing coordinator
+continues collecting accepted runs, settling task cancellations and closing
+merged work. Use `recovery drain` to inspect outstanding graph plans,
 claims, reservations and task obligations. Complete or cancel future dispatch
 and reconcile unresolved starts under the compatible runtime before switching
 artifacts. Back up the full private namespace and its matching runtime manifest.
