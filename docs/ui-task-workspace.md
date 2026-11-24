@@ -6,6 +6,16 @@ action. The summary shows meaningful activity age, task rounds, plan membership
 and saved prerequisites. Review approved brief and carried-source changes in
 place. Approved graph tasks keep their pinned inputs when continued.
 
+Select **View PRD** beside the task summary. The viewer opens the saved brief
+and lists the carried sources under **File provenance**. For example, the
+synthetic task `acme/atlas/search-index` can have a saved
+`docs/prds/search-index.md` alongside its carried `docs/review.json`. The
+origin and digest identify the saved copy even after the checkout moves or
+changes. Older records may show an unrecorded digest or a missing snapshot with
+recovery steps. **Source** exposes the original UTF-8 text, and **Copy link**
+preserves the selected file and view. In intake, **View prepared brief** opens
+the saved draft revision in the same viewer.
+
 Delivery evidence shows the saved task head and review policy. CI includes up to
 eight canonical job observations with failures first. Reviewer activity shows
 up to eight findings and the recorded reviewer pieces. Each evidence card

@@ -16,6 +16,12 @@
   }
   const initialUrl = pinSelection(new URL(location.href));
   if (initialUrl.href !== location.href) history.replaceState(history.state, '', initialUrl);
+  const planLocation = url => {
+    const view = new URL(url);
+    for (const key of ['artifact', 'artifactAt', 'fileView']) view.searchParams.delete(key);
+    return view.pathname + view.search;
+  };
+  let shownLocation = planLocation(initialUrl);
   const status = document.getElementById('chains-status'), refresh = document.getElementById('chains-refresh');
   const apply = document.getElementById('chains-apply'), dialog = document.getElementById('chain-confirm');
   const review = document.getElementById('chain-review'), actionStatus = document.getElementById('chain-action-status');
@@ -132,7 +138,7 @@
     const theme = url.searchParams.get('theme');
     if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
     document.getElementById('theme').value = theme || '';
-    carrySelection(url);
+    carrySelection(url); shownLocation = planLocation(url);
     if (position) {
       const open = new Set(position.open);
       for (const item of results.querySelectorAll('details[data-key]')) item.open = open.has(item.dataset.key);
@@ -147,7 +153,7 @@
   if (!legacy) {
     carrySelection(initialUrl);
     root.addEventListener('click', event => {
-      const link = event.target.closest('#chains-results a[href]');
+      const link = event.target.closest('#chains-results a[href]:not([data-artifact-link])');
       if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target) return;
       const url = new URL(link.href);
       if (url.origin !== location.origin || url.pathname !== location.pathname || url.hash) return;
@@ -158,7 +164,9 @@
     });
     globalThis.addEventListener('popstate', event => {
       if (location.hash) return;
-      poll({ url: new URL(location.href), position: event.state?.planView });
+      const url = new URL(location.href);
+      if (event.state?.artifactNavigation && planLocation(url) === shownLocation) return;
+      poll({ url, position: event.state?.planView });
     });
   }
   refresh.addEventListener('click', () => { failures = 0; poll(); });

@@ -13,6 +13,14 @@ missing receipts by node. Capacity waits reflect the coordinator's last
 dispatch attempt. A queued task stays in plan detail until registration.
 Registered tasks link to their individual worker controls and attempts.
 
+Use **View manifest** for the approved plan file and its input list. Select a
+queued leaf and open **View plan PRD** to start at that brief. For example,
+the synthetic `search-rollout.yaml` can bind `docs/prds/search-index.md`
+and its carried `docs/review.json`. The viewer lists each file’s origin and
+approved hashes. Older linear approvals may read the checkout copy if it
+still matches the saved digest. Missing or changed bytes show the saved
+change evidence and recovery guidance.
+
 The dependency list shows 25 rows per page. **Show diagram** displays the
 selected node and up to 24 immediate neighbors, collapsing groups outside the
 focused path. The diagram and its list alternative have the same IDs, links
@@ -39,8 +47,10 @@ checkout-relative `files`. Include the ready briefs, their carried sources
 and any permitted fragment files. Uploaded manifests are limited to 1 MiB.
 The root upload resolves includes against the approved input directory.
 Nested includes resolve relative to the bound fragment that refers to them.
-The preview displays hashes and relative labels. It leaves source bodies,
-credential bindings and absolute checkout paths in the coordinator.
+The review lists hashes and relative labels. **View reviewed files** opens the
+manifest and input bytes from that review. A link to a review works for the
+same authorized operator while the coordinator retains the preview in memory.
+If the preview has expired or been evicted, preview the plan again.
 [Protected admission setup](config.md#dependency-plan-admission) ·
 [Manifest grammar and API](dependency-plans.md)
 

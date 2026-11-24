@@ -104,6 +104,13 @@ that prefix. Theme, filters, plan and node selection and history links remain
 shareable. Ctrl/⌘ K opens navigation, `/` focuses the current search and Escape
 closes dialogs.
 
+In a mounted task, for example `/gallivant/run?id=acme%2Fatlas%2Fsearch-index`,
+**View PRD** uses the same packaged viewer and read service as standalone.
+The copy link carries the selected task or plan, file revision and view.
+The tracker rechecks current access on every file read. Keep the existing
+host authorization in front of the entire mount prefix, including
+`/gallivant/api/artifact`. The host continues serving its own file views.
+
 The loopback console shows local legacy work. Graph work needs authenticated
 `planOperatorForRequest` ingress and current protected read scope. An anchor
 needs both scopes and the original read, observe and link grants. Cross-company

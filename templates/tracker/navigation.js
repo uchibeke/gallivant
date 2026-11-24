@@ -66,7 +66,7 @@
   }
   document.addEventListener('click', event => {
     const link = event.target.closest?.('a[href]');
-    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download')) return;
+    if (!link || link.hasAttribute('data-artifact-link') || link.hasAttribute('data-artifact-heading') || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download')) return;
     decorate(link);
     if (link.target && link.target !== '_self') return;
     const target = new URL(link.href, location.href);

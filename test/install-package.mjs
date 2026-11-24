@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSyn
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { runtimeFile } from "../lib/plugin_package.mjs";
 const source = realpathSync(fileURLToPath(new URL("..", import.meta.url)));
@@ -20,7 +20,7 @@ try {
   const syntheticBriefs = new Set(["plan-view", "task-view", "qualification"].map(name => `templates/dependency-plan/docs/prds/synthetic-${name}.md`));
   for (const f of packed.files) assert.ok(syntheticBriefs.has(f.path) || !/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   assert.ok(packed.files.some(f => f.path === "README.md"), "README is packaged");
-  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "plans.js", "plans.css", "intake.js", "intake.css", "health.css"])
+  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "plans.js", "plans.css", "intake.js", "intake.css", "health.css", "artifact-viewer.js", "artifact-viewer.css"])
     assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
   for (const file of packed.files)
     assert.ok(!/(?:playwright|axe-core|chromium|firefox|webkit|test-results|fixtures)/.test(file.path), `development-only payload: ${file.path}`);
@@ -62,6 +62,14 @@ case "$*" in
 esac
 `, { mode: 0o700 });
   const env = { ...process.env, HOME: home, GALLIVANT_HOME: ghome, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`, npm_config_cache: cache, NPM_CONFIG_CACHE: cache, FIXTURE_GH_SCOPES: "repo", FIXTURE_SCOPE_ERROR: "0" };
+
+  // An unpacked tarball can print help before npm installs its dependencies.
+  const unpacked = join(root, "unpacked");
+  mkdirSync(unpacked);
+  run("tar", ["-xzf", tarball, "-C", unpacked]);
+  assert.equal(existsSync(join(unpacked, "package", "node_modules", "markdown-it")), false);
+  const unpackedCli = join(unpacked, "package", "bin", "gallivant.mjs");
+  assert.match(run(process.execPath, [unpackedCli, "--help"], { cwd: unpacked, env: { ...env, NODE_PATH: "" } }), /--no-server/);
 
   // The README fast path, word for word except that the package spec is this tarball rather than the registry name, so
   // the revision under test is what runs and not whatever is published. `npx` resolves the `gallivant` bin itself.
@@ -186,6 +194,11 @@ esac
   try {
     const { seedChains, CHAIN } = await import("./ui/chains-fixture.mjs");
     await seedChains(ui);
+    const { prdSnapshotPath } = await import(pathToFileURL(join(installed, "lib", "task_snapshots.mjs")));
+    const packageBrief = "# Installed approved brief\r\n";
+    const snapshotPath = prdSnapshotPath(ui.home, TASK);
+    mkdirSync(dirname(snapshotPath), { recursive: true });
+    writeFileSync(snapshotPath, packageBrief);
     // The driver stays in this development checkout. The consumer has only
     // production dependencies; pages/scripts/styles come from the installed tarball.
     assert.equal(existsSync(join(prefix, "node_modules/playwright")), false);
@@ -210,6 +223,9 @@ esac
         assert.equal(await page.locator(":focus").getAttribute("id"), "overview-q");
         await page.goto(`${ui.origin}${base}/run?id=${encodeURIComponent(TASK)}&run=${RUN}`);
         await page.waitForFunction(() => document.getElementById("workspace-state").textContent.includes("snapshot current"));
+        await page.getByRole("link", { name: "View PRD" }).click();
+        await page.getByRole("heading", { name: "Installed approved brief" }).waitFor();
+        await page.locator("#artifact-viewer").getByRole("button", { name: "Close", exact: true }).click();
         await page.locator("#run-note").fill("Installed package draft");
         await page.reload(); assert.equal(await page.locator("#run-note").inputValue(), "Installed package draft");
         assert.equal(await page.locator("#run-note").evaluate(el => getComputedStyle(el).minHeight), "44px");
@@ -229,6 +245,18 @@ esac
         if (path === "/") assert.match(body, /Skip to main content/);
         if (path === "/health" || path === "/system") assert.match(body, /data-health/);
         if (path === "/api/system-health") assert.equal(JSON.parse(body).health.coordinator.state, "unknown");
+        if (path.startsWith("/run?")) {
+          const viewer = /data-artifact-link href="([^"]+)"/.exec(body)?.[1];
+          assert.ok(viewer, "installed task renders an artifact link");
+          const params = new URL(viewer.replaceAll("&amp;", "&"), ui.origin).searchParams;
+          const query = new URLSearchParams({ id: TASK, artifact: params.get("artifact") });
+          const result = await fetch(`${ui.origin}${base}/api/artifact?${query}`);
+          assert.equal(result.headers.get("cache-control"), "no-store");
+          assert.equal(result.status, 200);
+          const file = await result.json();
+          assert.equal(file.text, packageBrief);
+          assert.match(file.preview.html, /<h1[^>]*>Installed approved brief<\/h1>/);
+        }
         if (path === "/task/new") {
           assert.match(body, /Prepare requirements/);
           assert.match(body, /No registered source checkout/);
@@ -259,7 +287,7 @@ esac
       }
     }
     assert.deepEqual(errors, []);
-    if (page) console.log("Installed UI browser smoke: root and mounted navigation, scripts, styles and draft recovery passed.");
+    if (page) console.log("Installed UI browser smoke: root and mounted navigation, scripts, styles, artifact viewing and draft recovery passed.");
   } finally { await browser?.close(); await ui.close(); }
   console.log(`Installed ${packed.name}@${packed.version}: npx fast path (binary, config permissions, repository registration, repeat safety, next steps), credential-scope refusals before writes, version, help, packaged PRD, validation and all module exports passed.`);
 } finally { rmSync(root, { recursive: true, force: true }); }
