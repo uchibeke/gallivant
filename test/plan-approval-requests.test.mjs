@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { inspectPlanApproval, planControl, previewPlan, recordPlanApprovalConsent } from "../lib/dependency_plan_admission.mjs";
 import { newPlanReviewId } from "../lib/dependency_plan_registry.mjs";
@@ -39,7 +41,15 @@ async function client(world, base = "") {
 }
 
 test("read-only preview and copied mounted approval preserve exact YAML, briefs, sources and frozen gates across restart", async t => {
-  const world = await planFixture(t), { ctx, state } = world, api = await client(world, "/gallivant");
+  const parent = mkdtempSync(join(tmpdir(), "plan-review-parent-"));
+  const temporaryParent = join(parent, "alias");
+  let world;
+  try {
+    symlinkSync(parent, temporaryParent, "dir");
+    world = await planFixture(t, { temporaryParent });
+  } finally { t.after(() => rmSync(parent, { recursive: true, force: true })); }
+  const { ctx, state } = world, api = await client(world, "/gallivant");
+  assert.notEqual(dirname(state.file), world.home, "the registry was originally opened through an alias");
   ctx.config.required_checks = ["Build and test / macOS"];
   const producer = await world.queue("release-producer", [task("upstream")]);
   const prd = GOOD_PRD.replace("harness: codex", "harness: codex\nsources: [inputs/reference.md]");
@@ -62,8 +72,11 @@ test("read-only preview and copied mounted approval preserve exact YAML, briefs,
   assert.equal(ctx.state.graphPlans().length, 1);
   const savedBytes = readFileSync(state.file), hostReads = world.calls.length;
   ctx.state = makeState(world.home);
+  assert.equal((await api.read(saved.requestId)).status, 403, "a grant stays bound to its registry path");
+  ctx.state = makeState(dirname(state.file));
+  assert.notEqual(ctx.state, state, "reopen the durable registry with a fresh reader");
   const { status, data } = await api.read(saved.requestId);
-  assert.equal(status, 200);
+  assert.equal(status, 200, JSON.stringify(data));
   assert.equal(data.revision, saved.revision);
   assert.deepEqual(data.proposal.order, ["upstream", "checks/reviewed", "checks/final"]);
   assert.equal(data.proposal.anchors[0].instanceId, producer.instanceId);
