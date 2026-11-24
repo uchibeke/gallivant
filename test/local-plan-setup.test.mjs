@@ -9,11 +9,13 @@ import { promisify } from "node:util";
 import { test } from "node:test";
 import { mount, serve } from "../lib/commands/serve.mjs";
 import { queueChain } from "../lib/chains.mjs";
+import { makeExecution } from "../lib/execution.mjs";
 import { localWorkerCommand, planSocketPath } from "../lib/local_plan_boundary.mjs";
 import { callLocalPlans, makeLocalPlans, setupLocalPlans } from "../lib/local_plan_service.mjs";
 import { planOperator } from "../lib/operator_intent.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
+import { makeRunner } from "../lib/run.mjs";
 import { makeState } from "../lib/state.mjs";
 import { CONFIG, GOOD_PRD, fakeGh, harnessBin, silentLog } from "./helpers.mjs";
 
@@ -177,6 +179,34 @@ test("launch, grant and boundary drift stop admission while retaining the origin
   assert.throws(() => restarted.authorLaunch("codex", { plan: { instanceId: saved.instanceId } }, f.raw.harness.codex.bin, [], {}), { code: "PLAN_QUALIFICATION", dispatchNotSent: true });
   writeJsonAtomic(f.configFile, old);
   assert.deepEqual(await callLocalPlans(f.home, command), saved);
+});
+
+test("qualification changes during worker launch preparation refuse dispatch before spawn", async t => {
+  const root = mkdtempSync(join(tmpdir(), "lp-launch-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  let qualified = true;
+  const runner = makeRunner(root, { launch: async (cmd, args, { cwd, executionKind }) => {
+    assert.equal(executionKind, "implementation");
+    qualified = false;
+    return { cmd, args, options: { cwd } };
+  } });
+  const service = makeExecution({ root, taskId: REPO + "/launch-guard", provider: "codex", runner });
+  const operationId = "approved-start";
+  const start = service.submit({ operationId, kind: "implementation", name: "fixture",
+    spec: { cmd: process.execPath, args: ["-e", "process.exit(0)"], options: { cwd: root } },
+    allowance: { remainingUsd: 1, reservedUsd: 0.1 } }, () => {
+    if (!qualified) throw Object.assign(new Error("Qualification changed."), { code: "PLAN_QUALIFICATION" });
+  });
+  await assert.rejects(start, { code: "PLAN_QUALIFICATION", dispatchNotSent: true });
+  const ledger = service.state();
+  assert.equal(ledger.current, null);
+  assert.deepEqual(ledger.operations, {});
+  assert.equal(ledger.allowance, undefined);
+  assert.equal(ledger.dispatchRefusals.length, 1);
+  const [refusal] = ledger.dispatchRefusals;
+  assert.equal(refusal.operationId, operationId);
+  assert.equal(existsSync(runner.dirOf(refusal.runId)), false);
+  assert.equal(existsSync(join(root, "latest-run")), false);
 });
 
 test("standalone and mounted trackers require a scoped session issued by the local service", async t => {
