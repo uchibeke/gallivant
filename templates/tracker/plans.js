@@ -264,6 +264,14 @@ function renderPlanReview(review, data) {
     entries(review, 'Changed dependency contracts', scope.changes, item => `${item.id} · ${item.before ?? 'added'} → ${item.after ?? 'removed'}`);
     entries(review, 'Changed source hashes', scope.sources, item => `${item.id} · ${item.before ?? 'added'} → ${item.after ?? 'removed'}`);
   }
+  if (data.artifact) {
+    const url = new URL(location.href);
+    url.searchParams.set('artifact', data.artifact);
+    url.searchParams.delete('artifactAt'); url.searchParams.delete('fileView'); url.hash = '';
+    const link = planElement('a', 'View reviewed files', { href: url.pathname + url.search,
+      'data-artifact-link': '', 'aria-haspopup': 'dialog', class: 'artifact-trigger' });
+    review.append(link);
+  }
   if (!proposal) { review.append(identity); return; }
   review.prepend(planElement('h3', proposal.name));
   const { parallel, resources } = proposal;

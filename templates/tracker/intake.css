@@ -24,7 +24,6 @@
 .intake dd { margin: 2px 0 0; }
 .intake li { margin-bottom: 10px; }
 .intake summary { padding: 12px 0; min-height: 44px; }
-.intake-brief { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 500px; overflow: auto; padding: 16px; background: var(--gv-canvas); }
 .intake dialog { max-width: min(560px, calc(100% - 32px)); background: var(--gv-surface); color: var(--gv-text); border: 1px solid var(--gv-line-strong); border-radius: var(--gv-r); padding: 24px; }
 .intake dialog::backdrop { background: var(--gv-bench); }
 #intake-provider-help:empty { display: none; }
