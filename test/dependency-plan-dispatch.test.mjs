@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { test } from "node:test";
 import { stringify } from "yaml";
-import { queuePlan, previewPlan, inspectPlan } from "../lib/dependency_plan_admission.mjs";
+import { queuePlan, previewPlan, inspectPlan, planControl } from "../lib/dependency_plan_admission.mjs";
+import { newPlanReviewId } from "../lib/dependency_plan_registry.mjs";
 import { tickDependencyPlans } from "../lib/dependency_plan_dispatch.mjs";
 import { queueChain, tickChains } from "../lib/chains.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -100,7 +101,7 @@ function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, prepar
   ctx.planAuthority = bindPlanOperator(ctx.state.file, () => operatorOpen ? approvedScope() : null);
   const dispatchAuthority = bindPlanOperator(ctx.state.file, approvedScope, { dispatchOnly: true });
   const brief = (name, repo = PRODUCER) => put(join(dirs.get(repo), "docs/prds", `${name}.md`), GOOD_PRD.replace("harness: codex", `harness: ${harness}`));
-  const queue = async (name, nodes, format = "json") => {
+  const queue = async (name, nodes, format = "json", savedReview = false) => {
     const writeBriefs = children => {
       for (const node of children) {
         if (node.type === "task") brief(node.id, node.repository === "two" ? consumer : PRODUCER);
@@ -114,7 +115,11 @@ function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, prepar
     }, nodes };
     const file = put(join(root, `${name}.${format}`), format === "yaml" ? stringify(manifest) : JSON.stringify(manifest));
     const input = { file, options: { directory: root, checkouts: repositories.map(repo => basename(repo)) } };
-    return queuePlan(ctx, input, { approve: (await previewPlan(ctx, input)).approvalDigest });
+    const { approvalDigest: approve } = await previewPlan(ctx, input);
+    if (!savedReview) return queuePlan(ctx, input, { approve });
+    const command = { action: "queue", requestId: newPlanReviewId(), approve };
+    assert.equal((await planControl(ctx, { ...command, stage: "save", input })).status, "pending");
+    return (await planControl(ctx, { ...command, stage: "approve" })).receipt;
   };
   let schedule = makeRecoverySchedule({ home, clock });
   const restart = () => { ctx.state = makeState(home); schedule = makeRecoverySchedule({ home, clock }); };
@@ -264,8 +269,10 @@ test("cross-plan consumers share an immutable producer and never use another rep
   const w = fixture(t);
   await w.queue("producer", [task("ship")]);
   await w.queue("same-repo", [anchor("producer", "ship"), task("downstream", ["prerequisite"])]);
-  await w.queue("other-repo", [anchor("producer"), task("other", ["prerequisite"], "two")]);
-  await w.tick(); w.finish("ship"); const sha = w.merge("ship");
+  await w.queue("other-repo", [anchor("producer"), task("other", ["prerequisite"], "two")], "yaml", true);
+  await w.tick();
+  assert.equal(w.started("other", CONSUMER), 0, "the saved approval preserves its cross-repository integration gate");
+  w.finish("ship"); const sha = w.merge("ship");
   await w.advance();
   assert.equal(w.node("other-repo", "prerequisite").observed[0].receipt.repositoryId, "host-id-widget");
   w.bases.set(PRODUCER, "c".repeat(40)); // Healthy advance keeps ancestry.

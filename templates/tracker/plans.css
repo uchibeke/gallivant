@@ -48,6 +48,9 @@
 .plan-editor .plan-draft-children:not(:empty) { margin-block-start: 12px; }
 #plan-preview { margin-top: 12px; }
 #plan-review { border-block-end: 1px solid var(--gv-line); padding-block-end: 8px; }
+.chains[data-plan-approval] .review-confirm-body { max-height: none; overflow: visible; overflow-wrap: anywhere; }
+.chains[data-plan-approval] summary { min-height: 44px; align-content: center; }
+.chains[data-plan-approval] .plan-actions { margin-block-start: 16px; }
 #plan-action-status { margin-block: 8px 12px; }
 @media (max-width: 700px) {
   .plan-neighborhood, .plan-editor { padding: 12px; }

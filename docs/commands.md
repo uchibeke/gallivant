@@ -18,7 +18,7 @@ Use `gallivant --help` (or `gallivant help`) for the installed CLI's syntax and
 | Start work and services | `gallivant start [PRD]` | No PRD starts/reuses services only; `--no-open` and `--no-server` are available. |
 | Sequence work | `gallivant chain` | Each successor waits for the previous PR to merge; never auto-merges. |
 | Inspect a dependency graph | `gallivant plan validate <file> --json` | Compiles local JSON or YAML and returns a structural preview. |
-| Review approved graph work | `gallivant plan [NAME]`, `plan preview/queue`, `plan attach/edit/hold/unhold/cancel/retry/migration` | Protected operator ingress for admission and changes. Plans displays the saved dependency projection. |
+| Review graph work | `gallivant plan [NAME]`, `plan preview/request/approval`, `plan queue`, `plan attach/edit/hold/unhold/cancel/retry/migration` | Protected operator ingress for saved reviews, admission and changes. |
 | Adopt/reset a PR | `gallivant register PR_URL` | Explicit registration; existing entry resets its review budget and cursor. |
 | Run the coordinator | `gallivant up` | Foreground loop; `--once` performs one cycle. |
 | Stop services | `gallivant down` | Leaves active agent processes running. |
@@ -254,7 +254,10 @@ with `--json`. See [the grammar and runnable examples](dependency-plans.md).
 |---|---|
 | `gallivant plan setup --check [--worker USER] [--json]` | Report the selected host, worker identity and launch, approval access, configured graph ceilings and first prerequisite. Runs bounded checks without admitting work or writing config. |
 | `gallivant plan setup [--worker USER]` | Enroll the qualified local worker and operator for this home and set positive graph ceilings. Reports when to reload. |
-| `gallivant plan preview FILE --json` | Resolve the full approval through bounded read-only host and checkout checks. |
+| `gallivant plan preview FILE --json` | Resolve the full approval through bounded read-only host and checkout checks. The qualified local service returns a request ID for saving the review. |
+| `gallivant plan request FILE --approve REVISION [--request-id ID]` | Save a pending review and print the standalone approval path. Use the preview's request ID to retry creation after a lost response. |
+| `gallivant plan approval REQUEST_ID` | Inspect one saved review or its admission receipt through the private local socket. |
+| `gallivant plan approve REQUEST_ID --approve REVISION` | Resolve the exact revision. Return the saved receipt if accepted, or print the browser approval link and exit 1 when approval still needs an operator channel. Trusted tool hosts can convey consent through the protected endpoint. |
 | `gallivant plan queue FILE --approve DIGEST [--request-id ID]` | Save one reviewed plan through the private local service. Returns the receipt and tracker path. Reuse the digest and request identity after a lost response. |
 | `gallivant plan [inspect] [NAME]` | List or inspect admitted plans in the authenticated operator's scope. |
 | `gallivant plan session --repo OWNER/REPO [--repo OWNER/REPO ...]` | Issue a short-lived tracker session scoped to the named repositories. At `/plan-session`, use `operator` as the username and the session value as the password. |
@@ -263,7 +266,7 @@ with `--json`. See [the grammar and runnable examples](dependency-plans.md).
 | `gallivant plan retry NAME --node NODE --request-id ID` | Review rearming a blocked or provably unsubmitted node. |
 | `gallivant plan edit NAME FILE --request-id ID` | Review exact changes to future work. `attach` adds a reviewed producer link using the same review and confirmation flow. |
 
-Preview and queue accept the validation command's `--dir` and `--checkout`
+Preview, request and queue accept the validation command's `--dir` and `--checkout`
 arguments. Use the resolved preview's `approvalDigest` before its displayed
 expiry. Admission, protected inspection and saved producer links require a
 qualified deployment. [Dependency plan admission](dependency-plans.md#resolved-preview-and-admission)

@@ -281,6 +281,16 @@ test("standalone and mounted trackers require a scoped session issued by the loc
   const file = f.manifest("shared"), input = { file, options: { directory: f.checkout } };
   const { approvalDigest: approve } = await callLocalPlans(f.home, { op: "preview", ...input });
   const admission = await callLocalPlans(f.home, { op: "control", action: "queue", stage: "confirm", requestId: approve, approve, input });
+  const pendingFile = f.manifest("pending-shared", ["prepare", "check", "build", "release"]);
+  const preview = JSON.parse((await f.installedCli("preview", pendingFile)).stdout);
+  const pending = JSON.parse((await f.installedCli("request", pendingFile, "--approve", preview.approvalDigest,
+    "--request-id", preview.requestId)).stdout);
+  assert.equal(pending.status, "pending");
+  assert.equal(service.ctx.state.graphPlans().length, 1);
+  const approvalCommand = { action: "queue", stage: "approve", requestId: pending.requestId, approve: pending.revision };
+  await assert.rejects(callLocalPlans(f.home, { op: "control", ...approvalCommand }), { code: "PLAN_CONSENT" });
+  await assert.rejects(f.installedCli("approve", pending.requestId, "--approve", pending.revision), error =>
+    error.code === 1 && JSON.parse(error.stdout).approvalLink === pending.approvalLink);
   const ctx = f.context();
   ctx.localPlans = makeLocalPlans(ctx, f.boundary);
   ctx.planOperatorForRequest = ctx.localPlans.operatorForRequest;
@@ -299,6 +309,7 @@ test("standalone and mounted trackers require a scoped session issued by the loc
     return report.session;
   };
   const valid = await session(REPO), outside = await session(OTHER);
+  let receipt;
   for (const [instance, prefix] of [[server, "/work"], [standalone, ""]]) {
     const origin = `http://127.0.0.1:${instance.address().port}`, url = origin + prefix;
     const auth = session => ({ authorization: `Bearer ${session}` });
@@ -310,9 +321,10 @@ test("standalone and mounted trackers require a scoped session issued by the loc
     assert.equal(challenge.status, 401);
     assert.match(challenge.headers.get("www-authenticate"), /^Basic realm=/);
     const headers = { authorization: `Basic ${Buffer.from(`operator:${valid}`).toString("base64")}` };
-    const signIn = await fetch(`${url}/plan-session`, { redirect: "manual", headers });
+    const signIn = await fetch(`${url}/plan-session?approval=${pending.requestId}`, { redirect: "manual", headers });
     assert.equal(signIn.status, 303);
     assert.equal(signIn.headers.get("set-cookie"), null);
+    assert.equal(signIn.headers.get("location"), prefix + pending.approvalLink);
     const page = await (await fetch(`${url}/plans?plan=${admission.instanceId}`, { headers })).text();
     headers["x-gallivant-token"] = page.match(/data-token="([a-f0-9]+)"/)?.[1];
     assert.ok(headers["x-gallivant-token"], prefix);
@@ -321,7 +333,14 @@ test("standalone and mounted trackers require a scoped session issued by the loc
     const confirm = await post({ ...command, stage: "confirm", approve: (await review.json()).revision }, headers);
     assert.equal(confirm.status, 200, await confirm.clone().text());
     assert.equal((await confirm.json()).status, "applied");
+    const accepted = await post(approvalCommand, headers);
+    assert.equal(accepted.status, 200, await accepted.clone().text());
+    const result = await accepted.json();
+    receipt ??= result.receipt;
+    assert.deepEqual(result.receipt, receipt);
+    assert.equal(result.planLink, `${prefix}/plans?plan=${receipt.instanceId}`);
   }
+  assert.deepEqual(JSON.parse((await f.installedCli("approve", pending.requestId, "--approve", pending.revision)).stdout).receipt, receipt);
   f.expire(31 * 60_000);
   const expired = await fetch(`http://127.0.0.1:${standalone.address().port}/api/plan?plan=${admission.instanceId}`, { headers: { authorization: `Bearer ${valid}` } });
   assert.equal(expired.status, 403);

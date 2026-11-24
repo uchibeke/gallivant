@@ -224,9 +224,12 @@ gallivant plan validate synthetic.yaml --dir templates/dependency-plan --json
 On a GitHub and local Codex installation, provision a dedicated worker account
 and run `gallivant plan setup --check`. Once the account and path checks pass, enroll the
 operator with `gallivant plan setup`. Start the coordinator with
-`gallivant start --no-server`, then preview a plan and queue its exact approval
-digest. The coordinator continues from the saved approval as predecessor PRs
-are merged. [Worker setup and first plan](docs/dependency-plans.md#local-install)
+`gallivant start`, preview a plan, then choose **Create approval request** in
+Plans or run `gallivant plan request FILE --approve REVISION`. Open the returned
+`/plans?approval=REQUEST_ID` link in the operator dashboard to inspect the exact
+manifest and briefs and approve the plan. The coordinator releases dependent
+tasks as their predecessor PRs integrate into the approved bases.
+[Worker setup and first plan](docs/dependency-plans.md#local-install)
 
 [Dependency plans](docs/dependency-plans.md) · [Qualification](docs/dependency-plan-qualification.md)
 

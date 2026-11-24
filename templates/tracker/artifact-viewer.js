@@ -7,7 +7,7 @@
   const close = $('close'), preview = $('preview'), source = $('source'), retry = $('retry-file'), scroll = $('scroll');
   const copySource = $('copy-source'), copyLink = $('copy-link'), feedback = $('feedback');
   const selectors = ['artifact', 'artifactAt', 'fileView'];
-  const scope = ['id', 'task', 'plan', 'node', 'chain', 'milestone'];
+  const scope = ['id', 'task', 'plan', 'node', 'chain', 'milestone', 'approval'];
   const readFields = [...scope, 'artifact', 'artifactAt'];
   let trigger, request, stopCheck, current, renderedView, activeKey;
 

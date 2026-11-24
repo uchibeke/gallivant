@@ -48,19 +48,21 @@ and any permitted fragment files. Uploaded manifests are limited to 1 MiB.
 The root upload resolves includes against the approved input directory.
 Nested includes resolve relative to the bound fragment that refers to them.
 The review lists hashes and relative labels. **View reviewed files** opens the
-manifest and input bytes from that review. A link to a review works for the
-same authorized operator while the coordinator retains the preview in memory.
-If the preview has expired or been evicted, preview the plan again.
+manifest and input bytes from that review. Choose **Create approval request**
+to open a saved review inside Plans. Copy the page address to open the same
+revision in another tab or after the coordinator restarts. A mounted tracker
+includes its prefix in the link. For standalone sign-in, follow **Sign in as an
+operator** to return to the same request after signing in.
 [Protected admission setup](config.md#dependency-plan-admission) ·
 [Manifest grammar and API](dependency-plans.md)
 
-Import and preview leave the registry unchanged. Confirmation submits the
-reviewed revision and request ID to the shared plan control service.
-**Check saved request** reads a receipt when a confirmation response is lost.
-Keep the request ID if you leave the tab with an unresolved outcome. A stale
-preview needs new review. A confirmed plan goes to the coordinator for
-dispatch when permitted. Model access remains unverified by preview.
-Per-run allowances and provider cap support are displayed separately.
+Import, preview and opening the link perform no admission. While the saved
+request is pending, **Approve plan** submits the exact revision to the plan
+service. Once accepted, the view links to the admitted plan. Reload, Back and
+**Check saved request** read current status. Stale and expired requests require
+a new review. Denied requests identify a missing queue grant. Opening a link
+without current read access shows an unavailable request. Route details report
+model access as unverified until a separate qualification establishes it.
 
 Use plan or group review to hold, release or cancel future dispatch. The
 review lists affected future tasks and separately identifies admitted work.
@@ -71,7 +73,8 @@ workers use Message, Resume, Recheck and Cancel in their task workspace.
 
 ## Verification and captures
 
-`test/ui/dependency-plans.test.mjs` uses the real tracker server at the root
+`test/ui/dependency-plans.test.mjs` and `test/ui/plan-approval.test.mjs` use the
+real tracker server at the root
 and at the mounted prefix. It exercises a nested fork and join, capacity waits,
 shared future anchors, a closed branch, scoped control receipts, source
 changes and a dropped browser response. The fixture uses a synthetic operator
