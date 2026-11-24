@@ -33,7 +33,7 @@ async function denyTracker(port) {
 }
 
 try {
-  const { uid, pid, root, worktrees, protectedPaths, bin, socket, checkout, checkoutParent, trackerPort } = JSON.parse(process.argv[2]);
+  const { uid, pid, root, worktrees, protectedPaths, routes, socket, checkout, checkoutParent, trackerPort } = JSON.parse(process.argv[2]);
   if (process.getuid() !== uid || process.geteuid() !== uid || !uid || process.getgroups().includes(0)) throw new Error("Unexpected worker identity.");
   const policy = spawnSync("/usr/bin/sudo", ["-n", "-l"], { stdio: "ignore", timeout: 1000, killSignal: "SIGKILL" });
   if (policy.status !== 1) throw new Error("The worker must have no sudo grant.");
@@ -55,7 +55,10 @@ try {
       if (part === "/") break;
     }
   }
-  accessSync(bin, constants.R_OK | constants.X_OK);
+  for (const route of routes) {
+    accessSync(route.bin, constants.R_OK | constants.X_OK);
+    if (route.settings) accessSync(route.settings, constants.R_OK);
+  }
   accessSync(worktrees, constants.X_OK);
   if (parent) accessSync(parent, constants.X_OK);
   if (checkout) accessSync(checkout, constants.R_OK | constants.W_OK | constants.X_OK);
