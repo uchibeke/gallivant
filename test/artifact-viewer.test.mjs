@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { linkSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { contentDigest } from "../lib/hash.mjs";
@@ -79,6 +79,19 @@ test("artifact routes reject replaced paths, scope mismatches and protected cont
     assert.equal((await artifact(env, query)).data.state, "unavailable");
     rmSync(snapshot);
   }
+  put(snapshot, "Approved snapshot");
+  const parent = dirname(snapshot), relocated = join(home, "relocated-prds");
+  state.update(TASK, { snapshot_digest: contentDigest("Approved snapshot") });
+  const pinnedQuery = { id: TASK, artifact: taskBriefRef(TASK, state.get(TASK)) };
+  renameSync(parent, relocated);
+  symlinkSync(relocated, parent);
+  const moved = (await artifact(env, pinnedQuery)).data;
+  assert.equal(moved.state, "unavailable");
+  assert.equal(moved.text, undefined);
+  rmSync(parent);
+  renameSync(relocated, parent);
+  assert.equal((await artifact(env, pinnedQuery)).data.text, "Approved snapshot");
+  state.update(TASK, { snapshot_digest: null });
   for (const [bytes, expected] of [[Buffer.from([0, 0xff]), "binary"], ["", "empty"], [Buffer.alloc(1048577, 65), "oversized"],
     ["api_key=some-private-credential", "protected"], ["Workspace /Users/example/private/checkout", "protected"]]) {
     put(snapshot, bytes);
