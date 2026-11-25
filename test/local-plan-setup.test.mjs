@@ -392,7 +392,7 @@ test("enrolling Claude keeps the operator and existing state and uses the pinned
     assert.equal(run.args[run.args.indexOf("--settings") + 1], claude.settings);
     assert.equal(run.args[run.args.indexOf("--model") + 1], claude.model);
     assert.equal(run.runtimeSettings, undefined);
-    assert.deepEqual(launch.args.slice(-6, -1), ["--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']);
+    assert.deepEqual(launch.args.slice(-7), ["--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--", run.args.at(-1)]);
     assert.equal(launch.options.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, "1");
     assert.equal(launch.options.env.GH_TOKEN, "repo-credential");
     for (const name of ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "APORT_CLAUDE_CODE_CONFIG_DIR", "CP_RUN_DIR"]) {
