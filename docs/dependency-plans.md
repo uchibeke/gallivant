@@ -95,6 +95,31 @@ existing workspace and per-turn approval settings.
    parallel group. Merge both reviewed branches to release the join. The normal
    repository rules and maintainer perform those merges.
 
+### Claude Code worker route
+
+Keep the existing worker user and Gallivant home when adding Claude to a Codex
+installation. Configure `harness.claude.bin` with the absolute path of a native
+Claude Code 2.1.285 or newer executable outside worker writes. Set
+`harness.claude.settings` to the absolute path of the packaged
+`templates/claude-plan-settings.json` or an operator-owned equivalent
+that the worker can read. Keep the policy and its parent directories outside
+worker writes and the private coordinator home. The policy requires the
+sandbox and forbids unsandboxed commands. Add any approved tool domains and
+worker-local hooks to that policy before enrollment. Configure
+`harness.claude.model` if the plan requires a particular model.
+
+Sign in to Claude as the dedicated worker account. Verify `claude auth status`
+using the same executable and account before changing the active coordinator.
+The worker uses its own login and the qualified settings file. Gallivant
+excludes worker-writable user and project settings and repo MCP servers from
+the run. Qualify actual model access and start/resume separately.
+
+Run `gallivant down`, update the installed code and configuration, run
+`gallivant plan setup`, and start the coordinator against the same home. Setup
+keeps the operator identity, run registry, checkpoints, and existing worker
+account. The installed launch digest changes. Review plan approvals bound to
+the earlier digest before dispatching additional graph work.
+
 ### Local support matrix
 
 | Host | Launcher and prerequisites | Evidence status |

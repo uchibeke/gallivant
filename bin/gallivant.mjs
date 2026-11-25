@@ -170,7 +170,7 @@ async function planCommand(args, values) {
     const next = report.prerequisite || report.next;
     const output = values.json ? JSON.stringify(report) : [
       `Host: ${report.host.join(", ")} · ${report.platform}/${report.architecture}`,
-      `Worker: ${report.worker.route} · ${report.worker.executable ?? "unconfigured"} · ${report.worker.account ?? "no OS account selected"}`,
+      `Worker: ${report.worker.route} · ${Object.values(report.worker.executables).filter(Boolean).join(", ") || "unconfigured"} · ${report.worker.account ?? "no OS account selected"}`,
       `Isolation: ${report.isolation.status} (${report.isolation.launcher}) · model access: ${report.worker.modelAccess}`,
       `Approval access: ${report.approvalAccess}`,
       `Graph capacity: ${report.capacity.graph_authors} total, ${report.capacity.graph_per_repository} per repository`,

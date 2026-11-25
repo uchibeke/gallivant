@@ -14,6 +14,7 @@ import { grantPlanCheckout, localWorkerCommand, planSocketPath } from "../lib/lo
 import { callLocalPlans, makeLocalPlans, setupLocalPlans } from "../lib/local_plan_service.mjs";
 import { planOperator } from "../lib/operator_intent.mjs";
 import { makeGit } from "../lib/git.mjs";
+import { buildRun } from "../lib/harness.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { writeRepositoryText } from "../lib/repository_files.mjs";
 import { makeRunner } from "../lib/run.mjs";
@@ -88,7 +89,7 @@ function fixture(t) {
   const boundary = {
     specFor: (_ctx, worker) => {
       if (worker !== "plan-worker") throw Object.assign(new Error("Provision a dedicated worker account first."), { code: "PLAN_QUALIFICATION" });
-      return { root: home, worktrees, worker, bin: raw.harness.codex.bin, path: "/usr/bin:/bin", fingerprint };
+      return { root: home, worktrees, worker, routes: _ctx.config.harness, path: "/usr/bin:/bin", fingerprint };
     },
     probe: async (_spec, { socket }) => {
       calls.push(socket ? "worker-socket-probe" : "worker-preflight");
@@ -96,7 +97,7 @@ function fixture(t) {
       if (socket) assert.equal(socket, planSocketPath(home));
       return structuredClone(account);
     },
-    harnessCheck: async () => { calls.push("codex-version-sign-in"); return { ok: true }; },
+    harnessCheck: async provider => { calls.push(`${provider}-version-sign-in`); return { ok: true }; },
     clock: { now: () => time },
   };
   const context = () => ({ home, config: readJson(configFile), state: makeState(home), log: silentLog, gh, host: gh, git: makeGit({ config: raw }), planInputs: { directory: checkout } });
@@ -355,4 +356,51 @@ test("the launcher uses the configured route and retains only delegated Git and 
   assert.deepEqual(launch.args.slice(0, 4), ["-n", "-H", "-u", "#833"]);
   assert.deepEqual(launch.args.slice(5), ["--", "/cli/bin/exact codex", "exec", "resume", "saved-thread", "--json"]);
   assert.deepEqual(launch.options.env, { GH_TOKEN: "bound-repository", NODE_AUTH_TOKEN: "bound-package", GIT_CONFIG_COUNT: "0", PATH: "/cli/bin:/usr/bin:/bin", LC_ALL: "C", LANG: "C" });
+});
+
+test("enrolling Claude keeps the operator and existing state and uses the pinned worker route", async t => {
+  const f = fixture(t);
+  const paths = ["pending-first", "pending-second"].map(name => join(f.checkout, `docs/prds/${name}.md`));
+  for (const path of paths) write(path, GOOD_PRD);
+  await queueChain(f.context(), { name: "keep-progress", paths });
+  await f.setup({ worker: "plan-worker" });
+  const previous = readJson(f.configFile), registry = readFileSync(f.context().state.file);
+  const claude = { bin: "/installed/claude", settings: "/installed/claude-policy.json", model: "claude-fable-5-1[1m]" };
+  writeJsonAtomic(f.configFile, { ...previous, harness: { ...previous.harness, claude } });
+  f.changeArtifact("fixture-artifact-with-claude");
+  const setup = await f.setup({});
+  assert.equal(setup.changed, true);
+  assert.equal(setup.worker.executables.claude, claude.bin);
+  assert.ok(f.calls.includes("claude-version-sign-in"));
+  const config = readJson(f.configFile);
+  assert.equal(config.local_plan.owner, previous.local_plan.owner);
+  assert.equal(config.local_plan.key, previous.local_plan.key);
+  assert.deepEqual(config.local_plan.account, previous.local_plan.account);
+  assert.deepEqual(readFileSync(f.context().state.file), registry);
+
+  const checkout = join(f.raw.worktrees, "acme", "widget", "approved");
+  mkdirSync(checkout, { recursive: true });
+  const local = makeLocalPlans(f.context(), f.boundary);
+  const input = { cwd: checkout, env: { GH_TOKEN: "repo-credential", ANTHROPIC_API_KEY: "operator-only",
+    CLAUDE_CODE_OAUTH_TOKEN: "operator-only", APORT_CLAUDE_CODE_CONFIG_DIR: "/operator/private", CP_RUN_DIR: "/operator/run" } };
+  for (const mode of ["start", "resume"]) {
+    const session = "50c861da-6bcb-4570-bb2a-09d6ba019a2f";
+    const run = buildRun({ harness: "claude", config, mode, session, prompt: "Perform the approved work.", cwd: checkout });
+    const launch = await local.authorLaunch("claude", null, run.cmd, run.args, input);
+    assert.equal(launch.cmd, "/usr/bin/sudo");
+    assert.deepEqual(launch.args.slice(6, 9), [claude.bin, mode === "start" ? "--session-id" : "--resume", session]);
+    assert.equal(run.args[run.args.indexOf("--settings") + 1], claude.settings);
+    assert.equal(run.args[run.args.indexOf("--model") + 1], claude.model);
+    assert.equal(run.runtimeSettings, undefined);
+    assert.deepEqual(launch.args.slice(-7), ["--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--", run.args.at(-1)]);
+    assert.equal(launch.options.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, "1");
+    assert.equal(launch.options.env.GH_TOKEN, "repo-credential");
+    for (const name of ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "APORT_CLAUDE_CODE_CONFIG_DIR", "CP_RUN_DIR"]) {
+      assert.equal(launch.options.env[name], undefined, name);
+    }
+  }
+  assert.throws(() => local.checkHarnessOptions("claude").launcher("/different/claude", ["auth", "status"]), /unavailable/);
+  assert.equal(local.checkHarnessOptions("claude").minimumVersion, "2.1.285");
+  await assert.rejects(local.authorLaunch("claude", null, claude.bin, ["--settings", "/different/policy", "Example"], input),
+    { code: "PLAN_QUALIFICATION", dispatchNotSent: true });
 });
